@@ -1,0 +1,31 @@
+{
+  "name": "os/subscriptions",
+  "description": "Sell products as subscriptions",
+  "type": "shopware-platform-plugin",
+  "version": "0.0.1",
+  "license": "MIT",
+  "autoload": {
+    "psr-4": {
+      "OsSubscriptions\\": "src/"
+    }
+  },
+  "extra": {
+    "shopware-plugin-class": "OsSubscriptions\\OsSubscriptions",
+    "label": {
+      "de-DE": "Produkte einfach vermieten",
+      "en-GB": "Sell products as subscriptions"
+    },
+    "description": {
+      "de-DE": "Verkaufen Sie Produkte via Abonnements - Onlineschmiede Plugin",
+      "en-GB": "Sell products as subscriptions - Onlineschmiede Plugin"
+    },
+    "manufacturerLink": {
+      "de-DE": "https://onlineschmiede.at",
+      "en-GB": "https://onlineschmiede.at"
+    },
+    "supportLink": {
+      "de-DE": "https://onlineschmiede.at",
+      "en-GB": "https://onlineschmiede.at"
+    }
+  }
+}
