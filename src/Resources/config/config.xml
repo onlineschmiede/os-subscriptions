@@ -3,6 +3,34 @@
         xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/shopware/platform/master/src/Core/System/SystemConfig/Schema/config.xsd">
 
     <card>
+        <title>Residual purchase option for rent products</title>
+        <title lang="de-DE">Restkauf-Option für Miet-Produkte</title>
+        <input-field type="bool">
+            <name>residualPurchaseActive</name>
+            <label>Activate residual purchase options for rent products?</label>
+            <label lang="de-DE">Soll die Restkauf-Option für Miet-Produkte aktiviert werden?</label>
+        </input-field>
+
+        <input-field type="int">
+            <name>residualPurchaseValidUntilInterval</name>
+            <label>Maximum renewal interval where the residual purchase option can be used.</label>
+            <label lang="de-DE">Die maximale Intervall in der die Restkaufoption genutzt werden kann.</label>
+            <helpText>Enter value (6 = within 6 Months)</helpText>
+            <helpText lang="de-DE">Wert eingeben (6 = innerhalb von 6 Monaten)</helpText>
+            <defaultValue>6</defaultValue>
+        </input-field>
+
+        <input-field type="float">
+            <name>residualPurchaseAcknowledgedPaymentPercentage</name>
+            <label>Percentage that should be acknowledged for existing payments.</label>
+            <label lang="de-DE">Prozentsatz welcher für bestehende Zahlungen angerechnet werden soll.</label>
+            <helpText>Enter value (in decimal format 80.0)</helpText>
+            <helpText lang="de-DE">Wert eingeben (im Dezimalformat 80.0)</helpText>
+            <defaultValue>6</defaultValue>
+        </input-field>
+    </card>
+
+    <card>
         <title>Composition of the subscription order price and discount</title>
         <title lang="de-DE">Zusammensetzung des Abonnement-Bestellpreises und -Rabatts</title>
         <input-field type="single-select">
@@ -86,7 +114,7 @@
             <label lang="de-DE">Rabatt nach der ersten Zahlung (%)</label>
             <helpText>Enter value (in decimal format 10.5)</helpText>
             <helpText lang="de-DE">Wert eingeben (im Dezimalformat 10,5)</helpText>
-            <defaultValue>13.0</defaultValue>
+            <defaultValue>38.46</defaultValue>
         </input-field>
         <input-field type="float">
             <name>rentDiscountPercentageAtInterval2</name>
@@ -94,7 +122,7 @@
             <label lang="de-DE">Rabatt nach der zweiten Zahlung (%)</label>
             <helpText>Enter value (in decimal format 10.5)</helpText>
             <helpText lang="de-DE">Wert eingeben (im Dezimalformat 10,5)</helpText>
-            <defaultValue>8.0</defaultValue>
+            <defaultValue>53.84</defaultValue>
         </input-field>
         <input-field type="float">
             <name>rentDiscountPercentageAtInterval3</name>
@@ -102,7 +130,7 @@
             <label lang="de-DE">Rabatt nach der dritten Zahlung (%)</label>
             <helpText>Enter value (in decimal format 10.5)</helpText>
             <helpText lang="de-DE">Wert eingeben (im Dezimalformat 10,5)</helpText>
-            <defaultValue>6.0</defaultValue>
+            <defaultValue>53.84</defaultValue>
         </input-field>
         <input-field type="float">
             <name>rentDiscountPercentageAtInterval4</name>
@@ -110,7 +138,7 @@
             <label lang="de-DE">Rabatt nach der vierten Zahlung (%)</label>
             <helpText>Enter value (in decimal format 10.5)</helpText>
             <helpText lang="de-DE">Wert eingeben (im Dezimalformat 10,5)</helpText>
-            <defaultValue>6.0</defaultValue>
+            <defaultValue>53.84</defaultValue>
         </input-field>
         <input-field type="float">
             <name>rentDiscountPercentageAtInterval5</name>
@@ -118,7 +146,7 @@
             <label lang="de-DE">Rabatt nach der fünften Zahlung (%)</label>
             <helpText>Enter value (in decimal format 10.5)</helpText>
             <helpText lang="de-DE">Wert eingeben (im Dezimalformat 10,5)</helpText>
-            <defaultValue>6.0</defaultValue>
+            <defaultValue>53.84</defaultValue>
         </input-field>
         <input-field type="float">
             <name>rentDiscountPercentageAtInterval6</name>
@@ -126,7 +154,7 @@
             <label lang="de-DE">Rabatt nach der sechsten Zahlung (%)</label>
             <helpText>Enter value (in decimal format 10.5)</helpText>
             <helpText lang="de-DE">Wert eingeben (im Dezimalformat 10,5)</helpText>
-            <defaultValue>6.0</defaultValue>
+            <defaultValue>53.84</defaultValue>
         </input-field>
         <input-field type="float">
             <name>rentDiscountPercentageAtInterval7</name>
@@ -134,7 +162,7 @@
             <label lang="de-DE">Rabatt nach der siebten Zahlung (%)</label>
             <helpText>Enter value (in decimal format 10.5)</helpText>
             <helpText lang="de-DE">Wert eingeben (im Dezimalformat 10,5)</helpText>
-            <defaultValue>5.0</defaultValue>
+            <defaultValue>61.53</defaultValue>
         </input-field>
         <input-field type="float">
             <name>rentDiscountPercentageAtInterval8</name>
@@ -142,7 +170,7 @@
             <label lang="de-DE">Rabatt nach der achten Zahlung (%)</label>
             <helpText>Enter value (in decimal format 10.5)</helpText>
             <helpText lang="de-DE">Wert eingeben (im Dezimalformat 10,5)</helpText>
-            <defaultValue>5.0</defaultValue>
+            <defaultValue>61.53</defaultValue>
         </input-field>
         <input-field type="float">
             <name>rentDiscountPercentageAtInterval9</name>
@@ -150,7 +178,7 @@
             <label lang="de-DE">Rabatt nach der neunten Zahlung (%)</label>
             <helpText>Enter value (in decimal format 10.5)</helpText>
             <helpText lang="de-DE">Wert eingeben (im Dezimalformat 10,5)</helpText>
-            <defaultValue>5.0</defaultValue>
+            <defaultValue>61.53</defaultValue>
         </input-field>
         <input-field type="float">
             <name>rentDiscountPercentageAtInterval10</name>
@@ -158,7 +186,7 @@
             <label lang="de-DE">Rabatt nach der zehnten Zahlung (%)</label>
             <helpText>Enter value (in decimal format 10.5)</helpText>
             <helpText lang="de-DE">Wert eingeben (im Dezimalformat 10,5)</helpText>
-            <defaultValue>5.0</defaultValue>
+            <defaultValue>61.53</defaultValue>
         </input-field>
         <input-field type="float">
             <name>rentDiscountPercentageAtInterval11</name>
@@ -166,7 +194,7 @@
             <label lang="de-DE">Rabatt nach der elften Zahlung (%)</label>
             <helpText>Enter value (in decimal format 10.5)</helpText>
             <helpText lang="de-DE">Wert eingeben (im Dezimalformat 10,5)</helpText>
-            <defaultValue>5.0</defaultValue>
+            <defaultValue>61.53</defaultValue>
         </input-field>
         <input-field type="float">
             <name>rentDiscountPercentageAtInterval12</name>
@@ -174,7 +202,7 @@
             <label lang="de-DE">Rabatt nach der zwölften Zahlung (%)</label>
             <helpText>Enter value (in decimal format 10.5)</helpText>
             <helpText lang="de-DE">Wert eingeben (im Dezimalformat 10,5)</helpText>
-            <defaultValue>5.0</defaultValue>
+            <defaultValue>61.53</defaultValue>
         </input-field>
     </card>
 </config>
