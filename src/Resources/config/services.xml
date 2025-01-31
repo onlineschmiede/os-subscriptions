@@ -11,5 +11,11 @@
             <tag name="shopware.cart.processor" priority="4500" />
             <tag name="shopware.cart.collector" priority="4500" />
         </service>
+
+        <service id="OsSubscriptions\Service\StockStorageDecorator" decorates="Shopware\Core\Content\Product\Stock\StockStorage">
+            <argument type="service" id="OsSubscriptions\Service\StockStorageDecorator.inner" />
+            <argument type="service" id="order.repository"/>
+            <argument type="service" id="order_line_item.repository"/>
+        </service>
     </services>
 </container>
