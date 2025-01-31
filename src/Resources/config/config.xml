@@ -9,6 +9,7 @@
             <name>residualPurchaseActive</name>
             <label>Activate residual purchase options for rent products?</label>
             <label lang="de-DE">Soll die Restkauf-Option für Miet-Produkte aktiviert werden?</label>
+            <defaultValue>true</defaultValue>
         </input-field>
 
         <input-field type="int">
@@ -22,8 +23,8 @@
 
         <input-field type="float">
             <name>residualPurchaseAcknowledgedPaymentPercentage</name>
-            <label>Percentage that should be acknowledged for existing payments.</label>
-            <label lang="de-DE">Prozentsatz welcher für bestehende Zahlungen angerechnet werden soll.</label>
+            <label>Percentage that should be acknowledged for existing payments. (%)</label>
+            <label lang="de-DE">Prozentsatz welcher für bestehende Zahlungen angerechnet werden soll. (%)</label>
             <helpText>Enter value (in decimal format 80.0)</helpText>
             <helpText lang="de-DE">Wert eingeben (im Dezimalformat 80.0)</helpText>
             <defaultValue>6</defaultValue>

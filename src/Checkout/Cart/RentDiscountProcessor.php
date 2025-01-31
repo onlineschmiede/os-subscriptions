@@ -59,11 +59,13 @@ class RentDiscountProcessor implements CartDataCollectorInterface, CartProcessor
         }
 
         $originalOrderId = $originalIdExtension->getId();
-        $rentalDiscountPercentage = $this->getRentalDiscountPercentage($originalOrderId, $context->getContext());
 
         # as discount is global we can set it to CartDataCollection, so it is available in process method
         # this is important, as the process method is called many times (avoiding db exhaustion)
-        $data->set('rental-discount-percentage', $rentalDiscountPercentage);
+        if(empty($data->get('rental-discount-percentage'))){
+            $rentalDiscountPercentage = $this->getRentalDiscountPercentage($originalOrderId, $context->getContext());
+            $data->set('rental-discount-percentage', $rentalDiscountPercentage);
+        }
     }
 
 
@@ -95,7 +97,7 @@ class RentDiscountProcessor implements CartDataCollectorInterface, CartProcessor
         $rentalProductDiscount = $this->createDiscount('rental-discount');
 
         $discountPercentageDefinition = new PercentagePriceDefinition(
-            (100 - $rentDiscountPercentage) * -1,
+            $rentDiscountPercentage * -1,
             new LineItemRule(LineItemRule::OPERATOR_EQ, $rentalProducts->getReferenceIds())
         );
 
