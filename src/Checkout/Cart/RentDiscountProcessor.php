@@ -180,8 +180,8 @@ class RentDiscountProcessor implements CartDataCollectorInterface, CartProcessor
         $criteria = (new Criteria())->addFilter(new EqualsFilter('customFields.mollie_payments.swSubscriptionId', $subscriptionId));
         $interval = count($this->orderRepository->search($criteria, $context));
 
-        # use the last interval value (12) for continuous renewals that exceed the number of configured intervals
-        $interval = min($interval + 1, 12);
+        # use the last interval value set by user config if the interval exceeds the max number of renewals
+        $interval = min($interval + 1, $this->systemConfigService->get("OsSubscriptions.config.numberOfDiscounts", $orderEntity->getSalesChannelId()));
         return $this->systemConfigService->get("OsSubscriptions.config.rentDiscountPercentageAtInterval{$interval}", $orderEntity->getSalesChannelId());
     }
 }
