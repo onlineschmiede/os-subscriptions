@@ -149,7 +149,7 @@ class RentDiscountProcessor implements CartDataCollectorInterface, CartProcessor
      */
     private function createDiscount(string $name): LineItem
     {
-        $discountLineItem = new LineItem($name, 'example_discount', null, 1);
+        $discountLineItem = new LineItem($name, 'rent_interval_discount', null, 1);
 
         $discountLineItem->setLabel('Rabatt auf Abonnement');
         $discountLineItem->setGood(false);
