@@ -11,5 +11,11 @@
             <tag name="shopware.cart.processor" priority="4500" />
             <tag name="shopware.cart.collector" priority="4500" />
         </service>
+
+        <service id="OsSubscriptions\Subscriber\OrderSubscriber">
+            <argument type="service" id="order.repository"/>
+            <argument type="service" id="Shopware\Core\Content\Product\Stock\StockStorage"/>
+            <tag name="kernel.event_subscriber"/>
+        </service>
     </services>
 </container>
