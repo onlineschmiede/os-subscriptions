@@ -1,0 +1,43 @@
+{% sw_extends '@MolliePayments/storefront/page/account/subscriptions/subscription-item.html.twig' %}
+
+{% block page_account_subscriptions_item_context_menu_cancel %}
+    {# disabled #}
+{% endblock %}
+
+{% block page_account_subscriptions_item_context_menu_reorder %}
+    {# disabled #}
+{% endblock %}
+
+{% block page_account_mollie_subscriptions_order_table_toggle_button %}
+    {# disabled #}
+{% endblock %}
+
+{% block page_account_mollie_subscriptions_item_overview %}
+    {{ parent() }}
+    {# TODO: implement proper endpoints #}
+    <div class="order-wrapper">
+        <div class="order-item-header">
+            <div class="row flex-wrap">
+                <form action="{{ path('frontend.account.mollie.subscriptions.payment.update', { 'swSubscriptionId': subscription.id }) }}"
+                      method="post"
+                      data-form-csrf-handler="true"
+                      class="col-auto">
+
+                    <button class="btn btn-light btn-sm" type="submit">
+                       Restkauf
+                    </button>
+                </form>
+
+                <form action="{{ path('frontend.account.mollie.subscriptions.payment.update', { 'swSubscriptionId': subscription.id }) }}"
+                      method="post"
+                      data-form-csrf-handler="true"
+                      class="col-auto">
+
+                    <button class="btn btn-light btn-sm" type="submit">
+                       Rücksendung
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endblock %}

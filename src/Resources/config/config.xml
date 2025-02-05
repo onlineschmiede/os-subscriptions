@@ -15,7 +15,7 @@
         <input-field type="int">
             <name>residualPurchaseValidUntilInterval</name>
             <label>Maximum renewal interval where the residual purchase option can be used.</label>
-            <label lang="de-DE">Die maximale Intervall in der die Restkaufoption genutzt werden kann.</label>
+            <label lang="de-DE">Zeitraum in Monate in welcher die Restkaufoption genutzt werden kann.</label>
             <helpText>Enter value (6 = within 6 Months)</helpText>
             <helpText lang="de-DE">Wert eingeben (6 = innerhalb von 6 Monaten)</helpText>
             <defaultValue>6</defaultValue>
