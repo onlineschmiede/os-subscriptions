@@ -172,16 +172,20 @@ class RentDiscountProcessor implements CartDataCollectorInterface, CartProcessor
         $defaultDiscount = 0.0;
         $orderEntity = $this->orderRepository->search(new Criteria([$originalOrderNumber]), $context)->first();
         $orderCustomFields = $orderEntity->getCustomFields();
+
+        # orders through storefront don't have custom fields,
+        # so we can skip and return the default discount
         if(!$orderCustomFields) {
             return $defaultDiscount;
         } else {
             $subscriptionId = $orderCustomFields['mollie_payments']['swSubscriptionId'];
         }
         $criteria = (new Criteria())->addFilter(new EqualsFilter('customFields.mollie_payments.swSubscriptionId', $subscriptionId));
-        $interval = count($this->orderRepository->search($criteria, $context));
+        $existingOrderCount = count($this->orderRepository->search($criteria, $context));
 
         # use the last interval value set by user config if the interval exceeds the max number of renewals
-        $interval = min($interval + 1, $this->systemConfigService->get("OsSubscriptions.config.numberOfDiscounts", $orderEntity->getSalesChannelId()));
+        $maxNumberOfDiscounts = $this->systemConfigService->get("OsSubscriptions.config.numberOfDiscounts", $orderEntity->getSalesChannelId());
+        $interval = min($existingOrderCount, $maxNumberOfDiscounts);
         return $this->systemConfigService->get("OsSubscriptions.config.rentDiscountPercentageAtInterval{$interval}", $orderEntity->getSalesChannelId());
     }
 }
