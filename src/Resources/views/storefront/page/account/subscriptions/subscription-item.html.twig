@@ -18,15 +18,17 @@
     <div class="order-wrapper">
         <div class="order-item-header">
             <div class="row flex-wrap">
-                <form action="{{ path('frontend.account.mollie.subscriptions.payment.update', { 'swSubscriptionId': subscription.id }) }}"
-                      method="post"
-                      data-form-csrf-handler="true"
-                      class="col-auto">
+                {% if config('OsSubscriptions.config.residualPurchaseActive') %}
+                    <form action="{{ path('frontend.account.os.subscription.residual.purchase', { 'subscriptionId': subscription.id }) }}"
+                          method="post"
+                          data-form-csrf-handler="true"
+                          class="col-auto">
 
-                    <button class="btn btn-light btn-sm" type="submit">
-                       Restkauf
-                    </button>
-                </form>
+                        <button class="btn btn-light btn-sm" type="submit">
+                           Restkauf
+                        </button>
+                    </form>
+                {% endif %}
 
                 <form action="{{ path('frontend.account.mollie.subscriptions.payment.update', { 'swSubscriptionId': subscription.id }) }}"
                       method="post"
