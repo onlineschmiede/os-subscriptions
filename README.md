@@ -22,7 +22,7 @@ curl -X POST --location "https://test.babyrella.at/mollie/webhook/subscription/s
 The steps above should mark the subscription as active, which is required for renewals to work.
 
 At this stage you might want to test the renewal process without waiting a whole month for the next billing cycle.
-Therefore you have to modify the code below so you can trigger a renewal for each webhook call you fire.
+Therefore, you have to modify the code below so you can trigger a renewal for each webhook call you fire.
 
 ```php
 # custom/plugins/MolliePayments/src/Controller/Storefront/Webhook/WebhookControllerBase.php
@@ -40,7 +40,7 @@ Therefore you have to modify the code below so you can trigger a renewal for eac
             $swOrder = $this->subscriptions->renewSubscription($swSubscriptionId, $molliePaymentId, $context->getContext());
 ```
 
-Afterwards you can curl again:
+Afterward you can curl again:
 ```bash
 curl -X POST --location "https://test.babyrella.at/mollie/webhook/subscription/swSubscriptionId" \
     -H "Content-Type: application/x-www-form-urlencoded" \
@@ -50,5 +50,12 @@ curl -X POST --location "https://test.babyrella.at/mollie/webhook/subscription/s
 > [!IMPORTANT]
 > If you are finished testing the renewal process, keep in mind that you have to revert those changes back, otherwise
 > the subscription will not be activated.
+
+
+## dev: test residual purchase
+
+There is currently a bug with the system that requires you to set `APP_ENV=prod` on the initial load when visiting
+the account page, which can be set again to `APP_ENV=dev` after the mentioned initial load. Just don't forget
+to reload the page after those changes are applied.
 
 
