@@ -19,6 +19,7 @@ use Shopware\Core\Framework\DataAbstractionLayer\Search\Aggregation\Metric\SumAg
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\EntitySearchResult;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
+use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -94,7 +95,7 @@ class AccountController extends AbstractStoreFrontController
         EntityRepository $productRepository,
         CartService $cartService,
         LineItemFactoryRegistry $lineItemFactoryRegistry,
-        QuantityPriceCalculator $quantityPriceCalculator,
+        QuantityPriceCalculator $quantityPriceCalculator
     )
     {
         $this->pageLoader = $pageLoader;
@@ -180,9 +181,14 @@ class AccountController extends AbstractStoreFrontController
         // $checkoutUrl = $this->subscriptionManager->updatePaymentMethodStart($subscriptionId, $redirectUrl, $salesChannelContext->getContext());
     }
 
+    /**
+     * @param EntitySearchResult $orders
+     * @param SalesChannelContext $salesChannelContext
+     * @return LineItem
+     */
     private function getResidualDiscountLineItem(EntitySearchResult $orders, SalesChannelContext $salesChannelContext): LineItem
     {
-        $discountLineItem = new LineItem('residual-discount', 'rent_residual_discount', null, 1);
+        $discountLineItem = new LineItem(Uuid::randomHex(), 'rent_residual_discount', null, 1);
 
         $discountLineItem->setLabel('Restkauf Rabatt auf Abonnement');
         $discountLineItem->setGood(false);
