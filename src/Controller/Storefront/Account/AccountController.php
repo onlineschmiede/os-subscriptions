@@ -128,9 +128,8 @@ class AccountController extends AbstractStoreFrontController
             $maxOrderCount = $this->systemConfigService->get("OsSubscriptions.config.residualPurchaseValidUntilInterval", $salesChannelContext->getSalesChannel()->getId());
 
             if($orderCount > $maxOrderCount) {
-                # TODO: handle error snippet key
                 return $this->routeToErrorPage(
-                    'molliePayments.subscriptions.account.errorUpdateAddress',
+                    'Die Restkaufoption für dieses Abonnement ist nicht mehr verfügbar.',
                     'Error while trying to purchase residually for subscription ' . $subscriptionId . ': orderCount is greater then maxOrderCount'
                 );
             }
@@ -153,14 +152,11 @@ class AccountController extends AbstractStoreFrontController
             $residualDiscountLineItem = $this->getResidualDiscountLineItem($orders, $salesChannelContext);
             $this->cartService->add($cart, $residualDiscountLineItem, $salesChannelContext);
 
-            # $this->cartService->recalculate($cart, $salesChannelContext);
-
-            return $this->redirectToRoute('frontend.checkout.confirm.page');
+            return $this->redirectToRoute('frontend.checkout.cart.page');
 
         } catch (\Throwable $exception) {
-            # TODO: handle error snippet key
             return $this->routeToErrorPage(
-                'molliePayments.subscriptions.account.errorUpdateAddress',
+                'Unerwarteter Fehler beim nutzen der Restkauf-Option.',
                 'Error when updating billing address of subscription ' . $subscriptionId . ': ' . $exception->getMessage()
             );
         }
@@ -188,9 +184,10 @@ class AccountController extends AbstractStoreFrontController
      */
     private function getResidualDiscountLineItem(EntitySearchResult $orders, SalesChannelContext $salesChannelContext): LineItem
     {
-        $discountLineItem = new LineItem(Uuid::randomHex(), 'rent_residual_discount', null, 1);
+        $discountLineItem = new LineItem(Uuid::randomHex(), LineItem::CUSTOM_LINE_ITEM_TYPE);
 
         $discountLineItem->setLabel('Restkauf Rabatt auf Abonnement');
+        $discountLineItem->setDescription('Restkauf Rabatt auf Abonnement');
         $discountLineItem->setGood(false);
         $discountLineItem->setStackable(false);
         $discountLineItem->setRemovable(false);
@@ -234,20 +231,23 @@ class AccountController extends AbstractStoreFrontController
             'type' => LineItem::PRODUCT_LINE_ITEM_TYPE,
             'referencedId' => $parentProduct->first()->getId(),
             'quantity' => $orderLineItemEntity->getQuantity(),
+            'payload' => [
+                'residualPurchase' => true,
+            ]
         ], $salesChannelContext);
     }
 
 
     /**
-     * @param string $errorSnippetKey
+     * @param string $errorMessage
      * @param string $logMessage
      * @return RedirectResponse
      */
-    private function routeToErrorPage(string $errorSnippetKey, string $logMessage): RedirectResponse
+    private function routeToErrorPage(string $errorMessage, string $logMessage): RedirectResponse
     {
         $this->logger->error($logMessage);
 
-        $this->addFlash(self::DANGER, $this->trans($errorSnippetKey));
+        $this->addFlash(self::DANGER, $errorMessage);
 
         return $this->redirectToRoute('frontend.account.mollie.subscriptions.page');
     }
