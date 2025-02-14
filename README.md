@@ -40,6 +40,23 @@ Therefore, you have to modify the code below so you can trigger a renewal for ea
             $swOrder = $this->subscriptions->renewSubscription($swSubscriptionId, $molliePaymentId, $context->getContext());
 ```
 
+Also make sure to disable the artificial throttling by commenting following lines:
+
+```php
+# custom/plugins/MolliePayments/src/Controller/Storefront/Webhook/NotificationFacade.php
+
+    public function onNotify(string $swTransactionId, Context $context): void
+    {
+//        if ($orderCreatedAt !== null) {
+//            $createdAt = \DateTime::createFromImmutable($orderCreatedAt);
+//            $createdAt->modify('+2 minutes');
+//
+//            if ($now < $createdAt) {
+//                throw new WebhookIsTooEarlyException((string)$swOrder->getOrderNumber(), $now, $createdAt);
+//            }
+//        }
+```
+
 Afterward you can curl again:
 ```bash
 curl -X POST --location "https://test.babyrella.at/mollie/webhook/subscription/swSubscriptionId" \
