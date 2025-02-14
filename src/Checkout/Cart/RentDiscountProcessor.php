@@ -54,7 +54,7 @@ class RentDiscountProcessor implements CartDataCollectorInterface, CartProcessor
         # orders get copied from mollie subscriptions, so we can use the originalId extension to retrieve the original order
         # if there is no originalId extension, we can skip and assume its an initial storefront order
         $originalIdExtension = $original->getExtension('originalId');
-        if(!$originalIdExtension) {
+        if (!$originalIdExtension) {
             return;
         }
 
@@ -62,7 +62,7 @@ class RentDiscountProcessor implements CartDataCollectorInterface, CartProcessor
 
         # as discount is global we can set it to CartDataCollection, so it is available in process method
         # this is important, as the process method is called many times (avoiding db exhaustion)
-        if(empty($data->get('rental-discount-percentage'))){
+        if (empty($data->get('rental-discount-percentage'))) {
             $rentalDiscountPercentage = $this->getRentalDiscountPercentage($originalOrderId, $context->getContext());
             $data->set('rental-discount-percentage', $rentalDiscountPercentage);
         }
@@ -80,6 +80,8 @@ class RentDiscountProcessor implements CartDataCollectorInterface, CartProcessor
      */
     public function process(CartDataCollection $data, Cart $original, Cart $toCalculate, SalesChannelContext $context, CartBehavior $behavior): void
     {
+        $this->removeInvalidResidualDiscounts($original);
+
         # verify that we have rental products in the cart
         $rentalProducts = $this->findRentalProducts($toCalculate);
         if ($rentalProducts->count() === 0) {
@@ -90,7 +92,7 @@ class RentDiscountProcessor implements CartDataCollectorInterface, CartProcessor
         $rentDiscountPercentage = $data->get("rental-discount-percentage");
 
         # initial orders do not have any discount, we can skip
-        if(!$rentDiscountPercentage) {
+        if (!$rentDiscountPercentage) {
             return;
         }
 
@@ -112,6 +114,38 @@ class RentDiscountProcessor implements CartDataCollectorInterface, CartProcessor
     }
 
     /**
+     * Removes invalid residual discounts from the cart
+     * @param Cart $cart
+     * @return void
+     */
+    private function removeInvalidResidualDiscounts(Cart $cart): void
+    {
+        $residualDiscounts = $cart->getLineItems()->filter(function (LineItem $item) {
+            if ($item->getType() === LineItem::CUSTOM_LINE_ITEM_TYPE &&
+                $item->getPayloadValue('residualPurchase') === true) {
+                return true;
+            }
+            return false;
+        });
+
+        $residualProducts = $cart->getLineItems()->filter(function (LineItem $item) {
+            if ($item->getType() === LineItem::PRODUCT_LINE_ITEM_TYPE &&
+                $item->getPayloadValue('residualPurchase') === true) {
+                return true;
+            }
+            return false;
+        });
+
+        # if there are residual discounts, but no residual products,
+        # we can remove all residual discounts.
+        if($residualProducts->count() < 1 && $residualDiscounts->count() > 0) {
+            foreach($residualDiscounts as $key => $residualDiscount) {
+                $cart->remove($key);
+            }
+        }
+    }
+
+    /**
      * Filters the cart for rental products
      * @param Cart $cart
      * @return LineItemCollection
@@ -125,7 +159,7 @@ class RentDiscountProcessor implements CartDataCollectorInterface, CartProcessor
             }
 
             # Only consider products with options
-            if(!$item->getPayloadValue('options') || empty($item->getPayloadValue('options'))) {
+            if (!$item->getPayloadValue('options') || empty($item->getPayloadValue('options'))) {
                 return false;
             }
 
@@ -135,7 +169,7 @@ class RentDiscountProcessor implements CartDataCollectorInterface, CartProcessor
                 fn($carry, $option) => $carry && $option['option'] === 'Mieten',
                 true
             );
-            if($hasRentalOption === false) {
+            if ($hasRentalOption === false) {
                 return false;
             }
 
@@ -175,9 +209,13 @@ class RentDiscountProcessor implements CartDataCollectorInterface, CartProcessor
 
         # orders through storefront don't have custom fields,
         # so we can skip and return the default discount
-        if(!$orderCustomFields) {
+        if (!$orderCustomFields) {
             return $defaultDiscount;
         } else {
+            if (!isset($orderCustomFields['mollie_payments']['swSubscriptionId'])) {
+                return $defaultDiscount;
+            }
+
             $subscriptionId = $orderCustomFields['mollie_payments']['swSubscriptionId'];
         }
         $criteria = (new Criteria())->addFilter(new EqualsFilter('customFields.mollie_payments.swSubscriptionId', $subscriptionId));
