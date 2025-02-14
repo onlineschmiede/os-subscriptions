@@ -190,7 +190,10 @@ class AccountController extends AbstractStoreFrontController
         $discountLineItem->setDescription('Restkauf Rabatt auf Abonnement');
         $discountLineItem->setGood(false);
         $discountLineItem->setStackable(false);
-        $discountLineItem->setRemovable(false);
+        $discountLineItem->setRemovable(true);
+        $discountLineItem->setPayload([
+            'residualPurchase' => true,
+        ]);
 
         $acknowledgedPaymentPercentage = $this->systemConfigService
             ->get("OsSubscriptions.config.residualPurchaseAcknowledgedPaymentPercentage",

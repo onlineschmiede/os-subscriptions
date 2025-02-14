@@ -2,6 +2,7 @@
 
 namespace OsSubscriptions\Subscriber;
 
+use Shopware\Core\Checkout\Cart\LineItem\LineItem;
 use Shopware\Core\Checkout\Order\Aggregate\OrderLineItem\OrderLineItemEntity;
 use Shopware\Core\Checkout\Order\OrderEvents;
 use Shopware\Core\Content\Product\Stock\AbstractStockStorage;
@@ -45,55 +46,71 @@ class OrderSubscriber implements EventSubscriberInterface
      */
     public function onOrderWritten(EntityWrittenEvent $event): void
     {
-       foreach ($event->getWriteResults() as $writeResult) {
+        foreach ($event->getWriteResults() as $writeResult) {
+            $criteria = new Criteria();
+            $criteria->addFilter(new EqualsFilter('id', $writeResult->getPrimaryKey()));
+            $criteria->addAssociation('lineItems');
+            $currentOrder = $this->orderRepository->search($criteria, $event->getContext());
 
-           # skip if we don't have any custom fields ready
-           if(! $writeResult->getProperty('customFields') ||
-               ! $writeResult->getProperty('customFields')['mollie_payments'])
-           {
-               return;
-           }
-           
-           $mollieData = $writeResult->getProperty('customFields')['mollie_payments'];
-           $criteria = (new Criteria())->addFilter(new EqualsFilter('customFields.mollie_payments.swSubscriptionId', $mollieData['swSubscriptionId']));
-           $subscriptionInterval = count($this->orderRepository->search($criteria, $event->getContext()));
+            # get all rentable product line items from the order
+            $currentOrderRentLineItems = array_filter(
+                $currentOrder->first()->getLineItems()->getElements(),
+                function (OrderLineItemEntity $item) {
+                    if (isset($item->getPayload()['options'])) {
+                        foreach ($item->getPayload()['options'] as $option) {
+                            if (isset($option['option']) && $option['option'] === 'Mieten') {
+                                return true;
+                            }
+                        }
+                    }
+                    return false;
+                }
+            );
 
-           # skip if the order is not a mollie subscription renewal
-           # meaning we will decrease the stock of the products in the order
-           # if it is an initial order.
-           if($subscriptionInterval < 2) {
-               return;
-           }
+            # get all residual product line items from the order
+            $currentOrderResidualLineItems = array_filter(
+                $currentOrder->first()->getLineItems()->getElements(),
+                function (OrderLineItemEntity $item) {
+                    if (isset($item->getPayload()['residualPurchase']) &&
+                        $item->getPayload()['residualPurchase'] === true &&
+                        $item->getType() === LineItem::PRODUCT_LINE_ITEM_TYPE) {
+                        return true;
+                    }
+                    return false;
+                }
+            );
 
-           $criteria = new Criteria();
-           $criteria->addFilter(new EqualsFilter('id', $writeResult->getPrimaryKey()));
-           $criteria->addAssociation('lineItems');
+            $lineItemsWithoutStockReduction = [];
 
-           # get all rentable product line items from the order
-           $currentOrder = $this->orderRepository->search($criteria, $event->getContext());
-           $currentOrderRentLineItems = array_filter(
-               $currentOrder->first()->getLineItems()->getElements(),
-               function(OrderLineItemEntity $item) {
-                   if (isset($item->getPayload()['options'])) {
-                       foreach ($item->getPayload()['options'] as $option) {
-                           if (isset($option['option']) && $option['option'] === 'Mieten') {
-                               return true;
-                           }
-                       }
-                   }
-                   return false;
-               }
-           );
+            # skip if we don't have any custom fields ready
+            if ($writeResult->getProperty('customFields') &&
+                isset($writeResult->getProperty('customFields')['mollie_payments']))
+            {
+                $mollieData = $writeResult->getProperty('customFields')['mollie_payments'];
+                $criteria = (new Criteria())->addFilter(new EqualsFilter('customFields.mollie_payments.swSubscriptionId', $mollieData['swSubscriptionId']));
+                $subscriptionInterval = count($this->orderRepository->search($criteria, $event->getContext()));
 
-           # alter the stock of rentable products in the order
-           # meaning we will not decrease the stock for those products.
-           $this->stockStorage->alter(
-               array_map(
-                   fn(OrderLineItemEntity $item) => new StockAlteration($item->getId(), $item->getProductId(), $item->getQuantity(), 0),
-                   $currentOrderRentLineItems
-               ),
-               $event->getContext()
-           );
-       }
+                # skip if the order is not a mollie subscription renewal
+                # meaning we will decrease the stock of the products in the order
+                # if it is an initial order.
+                if ($subscriptionInterval > 1) {
+                    $lineItemsWithoutStockReduction = array_merge($lineItemsWithoutStockReduction, $currentOrderRentLineItems);
+                }
+            }
+
+            if (count($currentOrderResidualLineItems) > 0) {
+                $lineItemsWithoutStockReduction = array_merge($lineItemsWithoutStockReduction, $currentOrderResidualLineItems);
+            }
+
+            if (count($lineItemsWithoutStockReduction) > 0) {
+                $this->stockStorage->alter(
+                    array_map(
+                        fn(OrderLineItemEntity $item) => new StockAlteration($item->getId(), $item->getProductId(), $item->getQuantity(), 0),
+                        $lineItemsWithoutStockReduction
+                    ),
+                    $event->getContext()
+                );
+            }
+        }
     }
 }
