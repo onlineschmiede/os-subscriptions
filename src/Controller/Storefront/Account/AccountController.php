@@ -2,7 +2,6 @@
 
 namespace OsSubscriptions\Controller\Storefront\Account;
 
-use Kiener\MolliePayments\Components\Subscription\Page\Account\SubscriptionPageLoader;
 use Kiener\MolliePayments\Components\Subscription\SubscriptionManager;
 use Kiener\MolliePayments\Controller\Storefront\AbstractStoreFrontController;
 use Psr\Log\LoggerInterface;
@@ -29,86 +28,66 @@ use Symfony\Component\Routing\Generator\UrlGenerator;
 
 class AccountController extends AbstractStoreFrontController
 {
-    /**
-     * @var SubscriptionPageLoader
-     */
-    private SubscriptionPageLoader $pageLoader;
-
-    /**
-     * @var SubscriptionManager
-     */
-    private SubscriptionManager $subscriptionManager;
-
-    /**
-     * @var LoggerInterface
-     */
-    private LoggerInterface $logger;
-
-    /**
-     * @var SystemConfigService
-     */
-    private SystemConfigService $systemConfigService;
-
-    /**
-     * @var EntityRepository
-     */
-    private EntityRepository $orderRepository;
-
-    /**
-    * @var EntityRepository
-    */
-    private EntityRepository $productRepository;
-
-    /**
-    * @var CartService
-    */
-    private CartService $cartService;
-
-    /**
-    * @var LineItemFactoryRegistry
-    */
-    private LineItemFactoryRegistry $lineItemFactoryRegistry;
-
-    /**
-    * @var QuantityPriceCalculator
-    */
-    private QuantityPriceCalculator $quantityPriceCalculator;
-
-
-    /**
-     * @param SubscriptionPageLoader $pageLoader
-     * @param SubscriptionManager $subscriptionManager
-     * @param LoggerInterface $logger
-     * @param SystemConfigService $systemConfigService
-     * @param EntityRepository $orderRepository
-     * @param EntityRepository $productRepository
-     * @param CartService $cartService
-     * @param LineItemFactoryRegistry $lineItemFactoryRegistry
-     * @param QuantityPriceCalculator $quantityPriceCalculator
-     */
     public function __construct(
-        SubscriptionPageLoader $pageLoader,
-        SubscriptionManager $subscriptionManager,
-        LoggerInterface $logger,
-        SystemConfigService $systemConfigService,
-        EntityRepository $orderRepository,
-        EntityRepository $productRepository,
-        CartService $cartService,
-        LineItemFactoryRegistry $lineItemFactoryRegistry,
-        QuantityPriceCalculator $quantityPriceCalculator
+        private readonly SubscriptionManager $subscriptionManager,
+        private readonly LoggerInterface $logger,
+        private readonly SystemConfigService $systemConfigService,
+        private readonly EntityRepository $orderRepository,
+        private readonly EntityRepository $productRepository,
+        private readonly CartService $cartService,
+        private readonly LineItemFactoryRegistry $lineItemFactoryRegistry,
+        private readonly QuantityPriceCalculator $quantityPriceCalculator
     )
+    { }
+
+    /**
+     * Mark the latest order within an subscription as initiated for cancellation.
+     * @param string $subscriptionId
+     * @param Request $request
+     * @param SalesChannelContext $salesChannelContext
+     * @return Response
+     */
+    public function initiateReturnOrderProcess(string $subscriptionId, Request $request, SalesChannelContext $salesChannelContext): Response
     {
-        $this->pageLoader = $pageLoader;
-        $this->subscriptionManager = $subscriptionManager;
-        $this->logger = $logger;
-        $this->systemConfigService = $systemConfigService;
-        $this->orderRepository = $orderRepository;
-        $this->productRepository = $productRepository;
-        $this->cartService = $cartService;
-        $this->lineItemFactoryRegistry = $lineItemFactoryRegistry;
-        $this->quantityPriceCalculator = $quantityPriceCalculator;
+        if (!$this->isLoggedIn($salesChannelContext) ||
+            !$this->systemConfigService->get("OsSubscriptions.config.residualPurchaseActive")) {
+            return $this->redirectToLoginPage();
+        }
+
+        try {
+            $criteria = (new Criteria())->addFilter(new EqualsFilter('customFields.mollie_payments.swSubscriptionId', $subscriptionId));
+            $orders = $this->orderRepository->search($criteria, $salesChannelContext->getContext());
+
+            $latestOrder = $orders->last();
+            $customFields = $latestOrder->getCustomFields() ?? [];
+            $customFields['subscription_cancellation_initialized_at'] = (new \DateTime())->format('Y-m-d H:i:s T');
+            $latestOrder->setCustomFields($customFields);
+
+            $this->orderRepository->update([
+                [
+                    'id' => $latestOrder->getId(),
+                    'customFields' => $customFields,
+                ]
+            ], $salesChannelContext->getContext());
+
+            return $this->routeToSuccessPage('Wir senden Ihnen in kürze alle Informationen bezüglich Ihrer Rücksendung zu. Bitte prüfen Sie Ihr E-Mail Postfach.', 'Return process initiated for subscription ' . $subscriptionId);
+
+        } catch (\Throwable $exception) {
+            return $this->routeToErrorPage(
+                'Unerwarteter Fehler beim starten des Rücksendungsprozesses.',
+                'Error while attempting to initiate the return process for subscription ' . $subscriptionId . ': ' . $exception->getMessage()
+            );
+        }
     }
 
+    /**
+     * Buy a running subscription residual
+     * @param string $subscriptionId
+     * @param Request $request
+     * @param SalesChannelContext $salesChannelContext
+     * @param Cart $cart
+     * @return Response
+     */
     public function residualPurchase(string $subscriptionId, Request $request, SalesChannelContext $salesChannelContext, Cart $cart): Response
     {
         if (!$this->isLoggedIn($salesChannelContext) ||
@@ -162,6 +141,14 @@ class AccountController extends AbstractStoreFrontController
         }
     }
 
+    /**
+     * ! WIP !
+     * @param string $subscriptionId
+     * @param Request $request
+     * @param SalesChannelContext $salesChannelContext
+     * @return void
+     * @throws \Exception
+     */
     public function cancelSubscription(string $subscriptionId, Request $request, SalesChannelContext $salesChannelContext)
     {
         $this->subscriptionManager->cancelSubscription($subscriptionId, $salesChannelContext->getContext());
@@ -251,6 +238,20 @@ class AccountController extends AbstractStoreFrontController
         $this->logger->error($logMessage);
 
         $this->addFlash(self::DANGER, $errorMessage);
+
+        return $this->redirectToRoute('frontend.account.mollie.subscriptions.page');
+    }
+
+    /**
+     * @param string $successMessage
+     * @param string $logMessage
+     * @return RedirectResponse
+     */
+    private function routeToSuccessPage(string $successMessage, string $logMessage): RedirectResponse
+    {
+        $this->logger->error($logMessage);
+
+        $this->addFlash(self::SUCCESS, $successMessage);
 
         return $this->redirectToRoute('frontend.account.mollie.subscriptions.page');
     }
