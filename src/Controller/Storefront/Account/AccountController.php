@@ -49,8 +49,7 @@ class AccountController extends AbstractStoreFrontController
      */
     public function initiateReturnOrderProcess(string $subscriptionId, Request $request, SalesChannelContext $salesChannelContext): Response
     {
-        if (!$this->isLoggedIn($salesChannelContext) ||
-            !$this->systemConfigService->get("OsSubscriptions.config.residualPurchaseActive")) {
+        if (!$this->isLoggedIn($salesChannelContext)) {
             return $this->redirectToLoginPage();
         }
 
