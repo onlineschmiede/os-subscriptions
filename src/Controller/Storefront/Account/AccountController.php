@@ -248,7 +248,7 @@ class AccountController extends AbstractStoreFrontController
      */
     private function routeToSuccessPage(string $successMessage, string $logMessage): RedirectResponse
     {
-        $this->logger->error($logMessage);
+        $this->logger->info($logMessage);
 
         $this->addFlash(self::SUCCESS, $successMessage);
 
