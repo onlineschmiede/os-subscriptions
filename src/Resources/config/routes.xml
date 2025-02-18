@@ -10,4 +10,11 @@
         <default key="_controller">OsSubscriptions\Controller\Storefront\Account\AccountController::residualPurchase</default>
         <default key="_routeScope"><list><string>storefront</string></list></default>
     </route>
+
+    <route id="frontend.account.os.subscription.order.return"
+           path="/account/os/subscriptions/{subscriptionId}/order/return"
+           methods="POST">
+        <default key="_controller">OsSubscriptions\Controller\Storefront\Account\AccountController::initiateReturnOrderProcess</default>
+        <default key="_routeScope"><list><string>storefront</string></list></default>
+    </route>
 </routes>

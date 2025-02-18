@@ -14,7 +14,6 @@
 
 {% block page_account_mollie_subscriptions_item_overview %}
     {{ parent() }}
-    {# TODO: implement proper endpoints #}
     <div class="order-wrapper">
         <div class="order-item-header">
             <div class="row flex-wrap">
@@ -30,7 +29,7 @@
                     </form>
                 {% endif %}
 
-                <form action="{{ path('frontend.account.mollie.subscriptions.payment.update', { 'swSubscriptionId': subscription.id }) }}"
+                <form action="{{ path('frontend.account.os.subscription.order.return', { 'subscriptionId': subscription.id }) }}"
                       method="post"
                       data-form-csrf-handler="true"
                       class="col-auto">
