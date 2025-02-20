@@ -13,6 +13,8 @@ use Shopware\Core\Checkout\Cart\Price\Struct\QuantityPriceDefinition;
 use Shopware\Core\Checkout\Cart\SalesChannel\CartService;
 use Shopware\Core\Checkout\Customer\CustomerEntity;
 use Shopware\Core\Checkout\Order\Aggregate\OrderLineItem\OrderLineItemEntity;
+use Shopware\Core\Checkout\Order\OrderEntity;
+use Shopware\Core\Content\Mail\Service\MailService;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Aggregation\Metric\SumAggregation;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
@@ -36,7 +38,9 @@ class AccountController extends AbstractStoreFrontController
         private readonly EntityRepository $productRepository,
         private readonly CartService $cartService,
         private readonly LineItemFactoryRegistry $lineItemFactoryRegistry,
-        private readonly QuantityPriceCalculator $quantityPriceCalculator
+        private readonly QuantityPriceCalculator $quantityPriceCalculator,
+        private readonly MailService $mailService,
+        private readonly EntityRepository $emailTemplateRepository
     )
     { }
 
@@ -55,6 +59,7 @@ class AccountController extends AbstractStoreFrontController
 
         try {
             $criteria = (new Criteria())->addFilter(new EqualsFilter('customFields.mollie_payments.swSubscriptionId', $subscriptionId));
+            $criteria->addAssociation('customer');
             $orders = $this->orderRepository->search($criteria, $salesChannelContext->getContext());
 
             $latestOrder = $orders->last();
@@ -68,6 +73,8 @@ class AccountController extends AbstractStoreFrontController
                     'customFields' => $customFields,
                 ]
             ], $salesChannelContext->getContext());
+
+            $this->sendSubscriptionCancellationEmail($latestOrder, $salesChannelContext);
 
             return $this->routeToSuccessPage('Wir senden Ihnen in kürze alle Informationen bezüglich Ihrer Rücksendung zu. Bitte prüfen Sie Ihr E-Mail Postfach.', 'Return process initiated for subscription ' . $subscriptionId);
 
@@ -141,7 +148,7 @@ class AccountController extends AbstractStoreFrontController
     }
 
     /**
-     * ! WIP !
+     * TODO: WIP - finish it
      * @param string $subscriptionId
      * @param Request $request
      * @param SalesChannelContext $salesChannelContext
@@ -161,6 +168,40 @@ class AccountController extends AbstractStoreFrontController
         );
 
         // $checkoutUrl = $this->subscriptionManager->updatePaymentMethodStart($subscriptionId, $redirectUrl, $salesChannelContext->getContext());
+    }
+
+    /**
+     * @param OrderEntity $orderEntity
+     * @param SalesChannelContext $salesChannelContext
+     * @return void
+     */
+    private function sendSubscriptionCancellationEmail(OrderEntity $orderEntity, SalesChannelContext $salesChannelContext): void
+    {
+        $criteria = new Criteria();
+        $criteria->addAssociation('mailTemplateType');
+        $criteria->addFilter(new EqualsFilter('mailTemplateType.technicalName', 'subscription.cancel'));
+        $emailTemplate = $this->emailTemplateRepository->search($criteria, $salesChannelContext->getContext())->first();
+
+        $mailData = [
+            'recipients' => [
+                $orderEntity->getOrderCustomer()->getEmail()
+            ],
+            'salesChannelId' => $salesChannelContext->getSalesChannel()->getId(),
+            'subject' => $emailTemplate->getTranslation('subject'),
+            'senderName' => $emailTemplate->getTranslation('senderName'),
+            'contentPlain' => $emailTemplate->getTranslation('contentPlain'),
+            'contentHtml' => $emailTemplate->getTranslation('contentHtml'),
+            'mediaIds' => [],
+        ];
+
+        $templateData = $emailTemplate->jsonSerialize();
+        $templateData['customer'] = $orderEntity->getOrderCustomer();
+
+        $this->mailService->send(
+            $mailData,
+            $salesChannelContext->getContext(),
+            $templateData
+        );
     }
 
     /**
@@ -225,7 +266,6 @@ class AccountController extends AbstractStoreFrontController
             ]
         ], $salesChannelContext);
     }
-
 
     /**
      * @param string $errorMessage
