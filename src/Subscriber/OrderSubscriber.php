@@ -2,6 +2,7 @@
 
 namespace OsSubscriptions\Subscriber;
 
+use Kiener\MolliePayments\Components\Subscription\SubscriptionManager;
 use Shopware\Core\Checkout\Cart\LineItem\LineItem;
 use Shopware\Core\Checkout\Order\Aggregate\OrderLineItem\OrderLineItemEntity;
 use Shopware\Core\Checkout\Order\OrderEvents;
@@ -15,18 +16,17 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 class OrderSubscriber implements EventSubscriberInterface
 {
-    private EntityRepository $orderRepository;
-    private AbstractStockStorage $stockStorage;
-
     /**
      * @param EntityRepository $orderRepository
      * @param AbstractStockStorage $stockStorage
+     * @param SubscriptionManager $subscriptionManager
      */
-    public function __construct(EntityRepository $orderRepository, AbstractStockStorage $stockStorage)
-    {
-        $this->orderRepository = $orderRepository;
-        $this->stockStorage = $stockStorage;
-    }
+    public function __construct(
+        private readonly EntityRepository $orderRepository,
+        private readonly AbstractStockStorage $stockStorage,
+        private readonly SubscriptionManager $subscriptionManager
+    )
+    { }
 
     /**
      * @return array
@@ -43,6 +43,7 @@ class OrderSubscriber implements EventSubscriberInterface
      * Stock on products that are rentable and the order is a renewal will not get decreased.
      * @param EntityWrittenEvent $event
      * @return void
+     * @throws \Exception
      */
     public function onOrderWritten(EntityWrittenEvent $event): void
     {
@@ -100,6 +101,19 @@ class OrderSubscriber implements EventSubscriberInterface
 
             if (count($currentOrderResidualLineItems) > 0) {
                 $lineItemsWithoutStockReduction = array_merge($lineItemsWithoutStockReduction, $currentOrderResidualLineItems);
+
+                # if the order is a residual purchase we have to cancel the subscription
+                # but as the order is not a mollie clone we have to obtain the subscriptionId set in the payload
+                # on any residualLineItems within the new order.
+                $subscriptionId = array_reduce($currentOrderResidualLineItems, function ($carry, OrderLineItemEntity $item) {
+                    $payload = $item->getPayload();
+                    return $payload['mollieSubscriptionId'] ?? $carry;
+                });
+
+                $subscriptionEntity = $this->subscriptionManager->findSubscription($subscriptionId, $event->getContext());
+                if($this->subscriptionManager->isCancelable($subscriptionEntity, $event->getContext())) {
+                    $this->subscriptionManager->cancelSubscription($subscriptionId, $event->getContext());
+                }
             }
 
             if (count($lineItemsWithoutStockReduction) > 0) {

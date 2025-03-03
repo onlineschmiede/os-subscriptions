@@ -17,7 +17,7 @@
     <div class="order-wrapper">
         <div class="order-item-header">
             <div class="row flex-wrap">
-                {% if config('OsSubscriptions.config.residualPurchaseActive') %}
+                {% if config('OsSubscriptions.config.residualPurchaseActive') and subscription.canceledAt is null %}
                     <form action="{{ path('frontend.account.os.subscription.residual.purchase', { 'subscriptionId': subscription.id }) }}"
                           method="post"
                           data-form-csrf-handler="true"

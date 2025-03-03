@@ -93,12 +93,21 @@ class AccountController extends AbstractStoreFrontController
      * @param SalesChannelContext $salesChannelContext
      * @param Cart $cart
      * @return Response
+     * @throws \Exception
      */
     public function residualPurchase(string $subscriptionId, Request $request, SalesChannelContext $salesChannelContext, Cart $cart): Response
     {
         if (!$this->isLoggedIn($salesChannelContext) ||
             !$this->systemConfigService->get("OsSubscriptions.config.residualPurchaseActive")) {
             return $this->redirectToLoginPage();
+        }
+
+        $subscriptionEntity = $this->subscriptionManager->findSubscription($subscriptionId, $salesChannelContext->getContext());
+        if(!$this->subscriptionManager->isCancelable($subscriptionEntity, $salesChannelContext->getContext())) {
+            return $this->routeToErrorPage(
+                'Die Restkaufoption für dieses Abonnement ist nicht mehr verfügbar.',
+                'Error while trying to purchase residually for subscription ' . $subscriptionId . ': tried to purchase residually for an already cancelled subscription'
+            );
         }
 
         try {
@@ -130,11 +139,11 @@ class AccountController extends AbstractStoreFrontController
                     continue;
                 }
 
-                $nonRentableLineItem = $this->getRelatedLineItemByOrderLineEntity($orderLineItem, $salesChannelContext);
+                $nonRentableLineItem = $this->getRelatedLineItemByOrderLineEntity($orderLineItem, $salesChannelContext, $subscriptionId);
                 $this->cartService->add($cart, $nonRentableLineItem, $salesChannelContext);
             }
 
-            $residualDiscountLineItem = $this->getResidualDiscountLineItem($orders, $salesChannelContext);
+            $residualDiscountLineItem = $this->getResidualDiscountLineItem($orders, $salesChannelContext, $subscriptionId);
             $this->cartService->add($cart, $residualDiscountLineItem, $salesChannelContext);
 
             return $this->redirectToRoute('frontend.checkout.cart.page');
@@ -142,32 +151,9 @@ class AccountController extends AbstractStoreFrontController
         } catch (\Throwable $exception) {
             return $this->routeToErrorPage(
                 'Unerwarteter Fehler beim nutzen der Restkauf-Option.',
-                'Error when updating billing address of subscription ' . $subscriptionId . ': ' . $exception->getMessage()
+                'Error occured on residual purchase for ' . $subscriptionId . ': ' . $exception->getMessage()
             );
         }
-    }
-
-    /**
-     * TODO: WIP - finish it
-     * @param string $subscriptionId
-     * @param Request $request
-     * @param SalesChannelContext $salesChannelContext
-     * @return void
-     * @throws \Exception
-     */
-    public function cancelSubscription(string $subscriptionId, Request $request, SalesChannelContext $salesChannelContext)
-    {
-        $this->subscriptionManager->cancelSubscription($subscriptionId, $salesChannelContext->getContext());
-
-        $redirectUrl = $this->generateUrl(
-            'frontend.account.mollie.subscriptions.payment.update-success',
-            [
-                'swSubscriptionId' => $subscriptionId
-            ],
-            UrlGenerator::ABSOLUTE_URL
-        );
-
-        // $checkoutUrl = $this->subscriptionManager->updatePaymentMethodStart($subscriptionId, $redirectUrl, $salesChannelContext->getContext());
     }
 
     /**
@@ -207,9 +193,10 @@ class AccountController extends AbstractStoreFrontController
     /**
      * @param EntitySearchResult $orders
      * @param SalesChannelContext $salesChannelContext
+     * @param string $subscriptionId
      * @return LineItem
      */
-    private function getResidualDiscountLineItem(EntitySearchResult $orders, SalesChannelContext $salesChannelContext): LineItem
+    private function getResidualDiscountLineItem(EntitySearchResult $orders, SalesChannelContext $salesChannelContext, string $subscriptionId): LineItem
     {
         $discountLineItem = new LineItem(Uuid::randomHex(), LineItem::CUSTOM_LINE_ITEM_TYPE);
 
@@ -220,6 +207,7 @@ class AccountController extends AbstractStoreFrontController
         $discountLineItem->setRemovable(true);
         $discountLineItem->setPayload([
             'residualPurchase' => true,
+            'mollieSubscriptionId' => $subscriptionId
         ]);
 
         $acknowledgedPaymentPercentage = $this->systemConfigService
@@ -246,9 +234,10 @@ class AccountController extends AbstractStoreFrontController
      * Returns related "non-rentable" LineItem that can be added to cart
      * @param OrderLineItemEntity $orderLineItemEntity
      * @param SalesChannelContext $salesChannelContext
+     * @param string $subscriptionId
      * @return LineItem
      */
-    private function getRelatedLineItemByOrderLineEntity(OrderLineItemEntity $orderLineItemEntity, SalesChannelContext $salesChannelContext): LineItem
+    private function getRelatedLineItemByOrderLineEntity(OrderLineItemEntity $orderLineItemEntity, SalesChannelContext $salesChannelContext, string $subscriptionId): LineItem
     {
         $criteria = new Criteria();
         $criteria->addFilter(new EqualsFilter('parentId', $orderLineItemEntity->getProduct()->getParentId()));
@@ -263,6 +252,7 @@ class AccountController extends AbstractStoreFrontController
             'quantity' => $orderLineItemEntity->getQuantity(),
             'payload' => [
                 'residualPurchase' => true,
+                'mollieSubscriptionId' => $subscriptionId,
             ]
         ], $salesChannelContext);
     }
