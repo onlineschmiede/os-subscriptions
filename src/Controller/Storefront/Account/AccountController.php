@@ -170,7 +170,7 @@ class AccountController extends AbstractStoreFrontController
 
         $mailData = [
             'recipients' => [
-                $orderEntity->getOrderCustomer()->getEmail()
+                $orderEntity->getOrderCustomer()->getEmail() => $orderEntity->getOrderCustomer()->getFirstName() . ' ' . $orderEntity->getOrderCustomer()->getLastName()
             ],
             'salesChannelId' => $salesChannelContext->getSalesChannel()->getId(),
             'subject' => $emailTemplate->getTranslation('subject'),
