@@ -77,7 +77,7 @@ class OsSubscriptions extends Plugin
                     'translations' => [
                         [
                             'languageId' => Defaults::LANGUAGE_SYSTEM,
-                            'name' => 'NIKO DOES NOT KNOW WHAT THIS FIELD IS FOR - IF U KNO IT, PLS TELL HIM!', # TODO: ....
+                            'name' => 'Rücksendung',
                         ],
                     ],
                 ],

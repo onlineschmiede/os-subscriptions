@@ -64,15 +64,16 @@ class AccountController extends AbstractStoreFrontController
 
             $latestOrder = $orders->last();
             $customFields = $latestOrder->getCustomFields() ?? [];
-            $customFields['subscription_cancellation_initialized_at'] = (new \DateTime())->format('Y-m-d H:i:s T');
-            $latestOrder->setCustomFields($customFields);
 
-            $this->orderRepository->update([
-                [
-                    'id' => $latestOrder->getId(),
-                    'customFields' => $customFields,
-                ]
-            ], $salesChannelContext->getContext());
+            if(!$customFields['subscription_cancellation_initialized_at']) {
+                $customFields['subscription_cancellation_initialized_at'] = (new \DateTime())->format('Y-m-d H:i:s T');
+                $this->orderRepository->update([
+                    [
+                        'id' => $latestOrder->getId(),
+                        'customFields' => $customFields,
+                    ]
+                ], $salesChannelContext->getContext());
+            }
 
             $this->sendSubscriptionCancellationEmail($latestOrder, $salesChannelContext);
 
