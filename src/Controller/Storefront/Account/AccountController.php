@@ -13,7 +13,6 @@ use Shopware\Core\Checkout\Cart\Price\Struct\QuantityPriceDefinition;
 use Shopware\Core\Checkout\Cart\SalesChannel\CartService;
 use Shopware\Core\Checkout\Customer\CustomerEntity;
 use Shopware\Core\Checkout\Order\Aggregate\OrderLineItem\OrderLineItemEntity;
-use Shopware\Core\Checkout\Order\OrderEntity;
 use Shopware\Core\Content\Mail\Service\MailService;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Aggregation\Metric\SumAggregation;
@@ -26,23 +25,24 @@ use Shopware\Core\System\SystemConfig\SystemConfigService;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\Routing\Generator\UrlGenerator;
 
 class AccountController extends AbstractStoreFrontController
 {
     public function __construct(
-        private readonly SubscriptionManager $subscriptionManager,
-        private readonly LoggerInterface $logger,
-        private readonly SystemConfigService $systemConfigService,
-        private readonly EntityRepository $orderRepository,
-        private readonly EntityRepository $productRepository,
-        private readonly CartService $cartService,
+        private readonly SubscriptionManager     $subscriptionManager,
+        private readonly SystemConfigService     $systemConfigService,
+        private readonly EntityRepository        $orderRepository,
+        private readonly EntityRepository        $productRepository,
+        private readonly CartService             $cartService,
         private readonly LineItemFactoryRegistry $lineItemFactoryRegistry,
         private readonly QuantityPriceCalculator $quantityPriceCalculator,
-        private readonly MailService $mailService,
-        private readonly EntityRepository $emailTemplateRepository
+        private readonly MailService             $mailService,
+        private readonly EntityRepository        $emailTemplateRepository,
+        private readonly EntityRepository        $subscriptionRepository,
+        private readonly LoggerInterface         $logger
     )
-    { }
+    {
+    }
 
     /**
      * Mark the latest order within an subscription as initiated for cancellation.
@@ -58,24 +58,22 @@ class AccountController extends AbstractStoreFrontController
         }
 
         try {
-            $criteria = (new Criteria())->addFilter(new EqualsFilter('customFields.mollie_payments.swSubscriptionId', $subscriptionId));
-            $criteria->addAssociation('customer');
-            $orders = $this->orderRepository->search($criteria, $salesChannelContext->getContext());
+            $subscriptionEntity = $this->subscriptionRepository->search(new Criteria([$subscriptionId]), $salesChannelContext->getContext())->first();
+            $subscriptionMetaData = $subscriptionEntity->getMetadata()->toArray() ?? [];
 
-            $latestOrder = $orders->last();
-            $customFields = $latestOrder->getCustomFields() ?? [];
+            $subscriptionMetaData['cancellation_initialized_at'] ??= (new \DateTime())->format('Y-m-d H:i:s T');
+            $subscriptionMetaData['cancellation_reviewed_at'] ??= null;
+            $subscriptionMetaData['cancellation_declined_at'] ??= null;
+            $subscriptionMetaData['cancellation_accepted_at'] ??= null;
 
-            if(!$customFields['subscription_cancellation_initialized_at']) {
-                $customFields['subscription_cancellation_initialized_at'] = (new \DateTime())->format('Y-m-d H:i:s T');
-                $this->orderRepository->update([
-                    [
-                        'id' => $latestOrder->getId(),
-                        'customFields' => $customFields,
-                    ]
-                ], $salesChannelContext->getContext());
-            }
+            $this->subscriptionRepository->update([
+                [
+                    'id' => $subscriptionEntity->getId(),
+                    'metadata' => $subscriptionMetaData,
+                ]
+            ], $salesChannelContext->getContext());
 
-            $this->sendSubscriptionCancellationEmail($latestOrder, $salesChannelContext);
+            $this->sendSubscriptionCancellationEmail($subscriptionId, $salesChannelContext);
 
             return $this->routeToSuccessPage('Wir senden Ihnen in kürze alle Informationen bezüglich Ihrer Rücksendung zu. Bitte prüfen Sie Ihr E-Mail Postfach.', 'Return process initiated for subscription ' . $subscriptionId);
 
@@ -104,7 +102,7 @@ class AccountController extends AbstractStoreFrontController
         }
 
         $subscriptionEntity = $this->subscriptionManager->findSubscription($subscriptionId, $salesChannelContext->getContext());
-        if(!$this->subscriptionManager->isCancelable($subscriptionEntity, $salesChannelContext->getContext())) {
+        if (!$this->subscriptionManager->isCancelable($subscriptionEntity, $salesChannelContext->getContext())) {
             return $this->routeToErrorPage(
                 'Die Restkaufoption für dieses Abonnement ist nicht mehr verfügbar.',
                 'Error while trying to purchase residually for subscription ' . $subscriptionId . ': tried to purchase residually for an already cancelled subscription'
@@ -122,21 +120,21 @@ class AccountController extends AbstractStoreFrontController
             $orderCount = count($orders);
             $maxOrderCount = $this->systemConfigService->get("OsSubscriptions.config.residualPurchaseValidUntilInterval", $salesChannelContext->getSalesChannel()->getId());
 
-            if($orderCount > $maxOrderCount) {
+            if ($orderCount > $maxOrderCount) {
                 return $this->routeToErrorPage(
                     'Die Restkaufoption für dieses Abonnement ist nicht mehr verfügbar.',
                     'Error while trying to purchase residually for subscription ' . $subscriptionId . ': orderCount is greater then maxOrderCount'
                 );
             }
 
-            foreach($initialOrder->getLineItems() as $orderLineItem) {
+            foreach ($initialOrder->getLineItems() as $orderLineItem) {
                 $hasRentalOption = array_reduce(
                     $orderLineItem->getPayload()['options'],
                     fn($carry, $option) => $carry && $option['option'] === 'Mieten',
                     true
                 );
 
-                if(!$hasRentalOption) {
+                if (!$hasRentalOption) {
                     continue;
                 }
 
@@ -158,12 +156,16 @@ class AccountController extends AbstractStoreFrontController
     }
 
     /**
-     * @param OrderEntity $orderEntity
+     * @param string $subscriptionId
      * @param SalesChannelContext $salesChannelContext
      * @return void
      */
-    private function sendSubscriptionCancellationEmail(OrderEntity $orderEntity, SalesChannelContext $salesChannelContext): void
+    private function sendSubscriptionCancellationEmail(string $subscriptionId, SalesChannelContext $salesChannelContext): void
     {
+        $criteria = (new Criteria())->addFilter(new EqualsFilter('customFields.mollie_payments.swSubscriptionId', $subscriptionId));
+        $criteria->addAssociation('customer');
+        $latestOrder = $this->orderRepository->search($criteria, $salesChannelContext->getContext())->last();
+
         $criteria = new Criteria();
         $criteria->addAssociation('mailTemplateType');
         $criteria->addFilter(new EqualsFilter('mailTemplateType.technicalName', 'subscription.cancel'));
@@ -171,7 +173,7 @@ class AccountController extends AbstractStoreFrontController
 
         $mailData = [
             'recipients' => [
-                $orderEntity->getOrderCustomer()->getEmail() => $orderEntity->getOrderCustomer()->getFirstName() . ' ' . $orderEntity->getOrderCustomer()->getLastName()
+                $latestOrder->getOrderCustomer()->getEmail() => $latestOrder->getOrderCustomer()->getFirstName() . ' ' . $latestOrder->getOrderCustomer()->getLastName()
             ],
             'salesChannelId' => $salesChannelContext->getSalesChannel()->getId(),
             'subject' => $emailTemplate->getTranslation('subject'),
@@ -182,7 +184,7 @@ class AccountController extends AbstractStoreFrontController
         ];
 
         $templateData = $emailTemplate->jsonSerialize();
-        $templateData['customer'] = $orderEntity->getOrderCustomer();
+        $templateData['customer'] = $latestOrder->getOrderCustomer();
 
         $this->mailService->send(
             $mailData,

@@ -4,6 +4,11 @@
            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
            xsi:schemaLocation="http://symfony.com/schema/dic/services http://symfony.com/schema/dic/services/services-1.0.xsd">
     <services>
+        <service id="os.subscriptions.logger" class="Monolog\Logger">
+            <factory service="Shopware\Core\Framework\Log\LoggerFactory" method="createRotating"/>
+            <argument type="string">os-subscriptions</argument>
+        </service>
+
         <service id="OsSubscriptions\Checkout\Cart\RentDiscountProcessor">
             <argument type="service" id="Shopware\Core\Checkout\Cart\Price\PercentagePriceCalculator"/>
             <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
@@ -17,11 +22,11 @@
             <argument type="service" id="Shopware\Core\Content\Product\Stock\StockStorage"/>
             <argument type="service" id="Kiener\MolliePayments\Components\Subscription\SubscriptionManager"/>
             <tag name="kernel.event_subscriber"/>
+            <argument type="service" id="mollie_subscription.repository"/>
         </service>
 
         <service id="OsSubscriptions\Controller\Storefront\Account\AccountController">
             <argument type="service" id="Kiener\MolliePayments\Components\Subscription\SubscriptionManager"/>
-            <argument type="service" id="mollie_payments.logger"/>
             <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
             <argument type="service" id="order.repository"/>
             <argument type="service" id="product.repository"/>
@@ -34,6 +39,8 @@
                 <argument type="service" id="service_container"/>
             </call>
             <tag name="controller.service_arguments"/>
+            <argument type="service" id="mollie_subscription.repository"/>
+            <argument type="service" id="os.subscriptions.logger" />
         </service>
     </services>
 </container>

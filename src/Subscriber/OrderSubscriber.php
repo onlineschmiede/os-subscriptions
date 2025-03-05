@@ -20,11 +20,13 @@ class OrderSubscriber implements EventSubscriberInterface
      * @param EntityRepository $orderRepository
      * @param AbstractStockStorage $stockStorage
      * @param SubscriptionManager $subscriptionManager
+     * @param EntityRepository $subscriptionRepository
      */
     public function __construct(
         private readonly EntityRepository $orderRepository,
         private readonly AbstractStockStorage $stockStorage,
-        private readonly SubscriptionManager $subscriptionManager
+        private readonly SubscriptionManager $subscriptionManager,
+        private readonly EntityRepository $subscriptionRepository
     )
     { }
 
@@ -112,7 +114,23 @@ class OrderSubscriber implements EventSubscriberInterface
 
                 $subscriptionEntity = $this->subscriptionManager->findSubscription($subscriptionId, $event->getContext());
                 if($this->subscriptionManager->isCancelable($subscriptionEntity, $event->getContext())) {
+
+                    # cancel the subscription through mollie API
                     $this->subscriptionManager->cancelSubscription($subscriptionId, $event->getContext());
+
+                    # mark the subscription as initiated for cancellation for POS
+                    $subscriptionEntity = $this->subscriptionRepository->search(new Criteria([$subscriptionId]), $event->getContext())->first();
+                    $subscriptionMetaData = $subscriptionEntity->getMetadata()->toArray() ?? [];
+
+                    if(!isset($subscriptionMetaData['residually_purchased_at'])) {
+                        $subscriptionMetaData['residually_purchased_at'] = (new \DateTime())->format('Y-m-d H:i:s T');
+                        $this->subscriptionRepository->update([
+                            [
+                                'id' => $subscriptionEntity->getId(),
+                                'metaData' => $subscriptionMetaData,
+                            ]
+                        ], $event->getContext());
+                    }
                 }
             }
 
