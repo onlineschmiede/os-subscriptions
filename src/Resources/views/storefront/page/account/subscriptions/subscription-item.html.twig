@@ -14,30 +14,36 @@
 
 {% block page_account_mollie_subscriptions_item_overview %}
     {{ parent() }}
+    {% set metadata = subscription.get('metadata') %}
     <div class="order-wrapper">
         <div class="order-item-header">
             <div class="row flex-wrap">
-                {% if config('OsSubscriptions.config.residualPurchaseActive') and subscription.canceledAt is null %}
-                    <form action="{{ path('frontend.account.os.subscription.residual.purchase', { 'subscriptionId': subscription.id }) }}"
-                          method="post"
-                          data-form-csrf-handler="true"
-                          class="col-auto">
+                <p><strong>Rücksendung angekündigt:</strong> {{ attribute(metadata, 'cancellation_initialized_at') is not empty ? attribute(metadata, 'cancellation_initialized_at')|date('d.m.Y H:i', 'Europe/Vienna') : 'N/A' }}</p>
+                <p><strong>Rücksendung erhalten:</strong> {{ attribute(metadata, 'cancellation_reviewed_at') is not empty ? attribute(metadata, 'cancellation_reviewed_at')|date('d.m.Y H:i', 'Europe/Vienna') : 'N/A' }}</p>
+                <div class='row flex-wrap' style="padding-top: 12px;padding-left:-12px;">
+                    {% if metadata['cancellation_initialized_at'] is not defined or metadata['cancellation_initialized_at'] is empty %}
+                        <form action="{{ path('frontend.account.os.subscription.order.return', { 'subscriptionId': subscription.id }) }}"
+                              method="post"
+                              data-form-csrf-handler="true"
+                              class="col-auto">
 
-                        <button class="btn btn-light btn-sm" type="submit">
-                           Restkauf
-                        </button>
-                    </form>
-                {% endif %}
+                            <button class="btn btn-light btn-sm" type="submit">
+                                Rücksendung
+                            </button>
+                        </form>
+                    {% endif %}
+                    {% if config('OsSubscriptions.config.residualPurchaseActive') and subscription.canceledAt is null %}
+                        <form action="{{ path('frontend.account.os.subscription.residual.purchase', { 'subscriptionId': subscription.id }) }}"
+                              method="post"
+                              data-form-csrf-handler="true"
+                              class="col-auto">
 
-                <form action="{{ path('frontend.account.os.subscription.order.return', { 'subscriptionId': subscription.id }) }}"
-                      method="post"
-                      data-form-csrf-handler="true"
-                      class="col-auto">
-
-                    <button class="btn btn-light btn-sm" type="submit">
-                       Rücksendung
-                    </button>
-                </form>
+                            <button class="btn btn-light btn-sm" type="submit">
+                                Restkauf
+                            </button>
+                        </form>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>

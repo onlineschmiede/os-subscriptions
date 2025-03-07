@@ -65,6 +65,7 @@ class AccountController extends AbstractStoreFrontController
             $subscriptionMetaData['cancellation_reviewed_at'] ??= null;
             $subscriptionMetaData['cancellation_declined_at'] ??= null;
             $subscriptionMetaData['cancellation_accepted_at'] ??= null;
+            $subscriptionMetaData['status'] ??= "cancellation_initialized";
 
             $this->subscriptionRepository->update([
                 [
