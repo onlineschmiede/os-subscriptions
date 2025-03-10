@@ -76,7 +76,7 @@ class AccountController extends AbstractStoreFrontController
 
             $this->sendSubscriptionCancellationEmail($subscriptionId, $salesChannelContext);
 
-            return $this->routeToSuccessPage('Wir senden Ihnen in kürze alle Informationen bezüglich Ihrer Rücksendung zu. Bitte prüfen Sie Ihr E-Mail Postfach.', 'Return process initiated for subscription ' . $subscriptionId);
+            return $this->routeToSuccessPage('Deine Rücksendung wurde angelegt. Wir senden dir in Kürze alle weiteren Informationen per E-Mail zu.', 'Return process initiated for subscription ' . $subscriptionId);
 
         } catch (\Throwable $exception) {
             return $this->routeToErrorPage(
