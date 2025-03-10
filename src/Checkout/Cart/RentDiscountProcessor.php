@@ -10,8 +10,11 @@ use Shopware\Core\Checkout\Cart\LineItem\CartDataCollection;
 use Shopware\Core\Checkout\Cart\LineItem\LineItem;
 use Shopware\Core\Checkout\Cart\LineItem\LineItemCollection;
 use Shopware\Core\Checkout\Cart\Price\PercentagePriceCalculator;
+use Shopware\Core\Checkout\Cart\Price\Struct\CalculatedPrice;
 use Shopware\Core\Checkout\Cart\Price\Struct\PercentagePriceDefinition;
 use Shopware\Core\Checkout\Cart\Rule\LineItemRule;
+use Shopware\Core\Checkout\Cart\Tax\Struct\CalculatedTaxCollection;
+use Shopware\Core\Checkout\Cart\Tax\Struct\TaxRuleCollection;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
@@ -68,7 +71,6 @@ class RentDiscountProcessor implements CartDataCollectorInterface, CartProcessor
         }
     }
 
-
     /**
      * Here we CAN NOT query the database without impact on performance
      * @param CartDataCollection $data
@@ -80,7 +82,10 @@ class RentDiscountProcessor implements CartDataCollectorInterface, CartProcessor
      */
     public function process(CartDataCollection $data, Cart $original, Cart $toCalculate, SalesChannelContext $context, CartBehavior $behavior): void
     {
-        $this->removeInvalidResidualDiscounts($original);
+        if($this->findResidualProducts($original)->count() > 0) {
+            $this->removeInvalidResidualDiscounts($original);
+            $this->removeShippingCosts($original);
+        }
 
         # verify that we have rental products in the cart
         $rentalProducts = $this->findRentalProducts($toCalculate);
@@ -111,6 +116,8 @@ class RentDiscountProcessor implements CartDataCollectorInterface, CartProcessor
 
         # add discount to new cart
         $toCalculate->add($rentalProductDiscount);
+
+        $this->removeShippingCosts($original);
     }
 
     /**
@@ -120,26 +127,13 @@ class RentDiscountProcessor implements CartDataCollectorInterface, CartProcessor
      */
     private function removeInvalidResidualDiscounts(Cart $cart): void
     {
-        $residualDiscounts = $cart->getLineItems()->filter(function (LineItem $item) {
-            if ($item->getType() === LineItem::CUSTOM_LINE_ITEM_TYPE &&
-                $item->getPayloadValue('residualPurchase') === true) {
-                return true;
-            }
-            return false;
-        });
-
-        $residualProducts = $cart->getLineItems()->filter(function (LineItem $item) {
-            if ($item->getType() === LineItem::PRODUCT_LINE_ITEM_TYPE &&
-                $item->getPayloadValue('residualPurchase') === true) {
-                return true;
-            }
-            return false;
-        });
+        $residualDiscounts = $this->findResidualDiscounts($cart);
+        $residualProducts = $this->findResidualProducts($cart);
 
         # if there are residual discounts, but no residual products,
         # we can remove all residual discounts.
-        if($residualProducts->count() < 1 && $residualDiscounts->count() > 0) {
-            foreach($residualDiscounts as $key => $residualDiscount) {
+        if ($residualProducts->count() < 1 && $residualDiscounts->count() > 0) {
+            foreach ($residualDiscounts as $key => $residualDiscount) {
                 $cart->remove($key);
             }
         }
@@ -176,6 +170,39 @@ class RentDiscountProcessor implements CartDataCollectorInterface, CartProcessor
             return $item;
         });
     }
+
+    /**
+     * Get all products within the cart that are marked for residual purchase
+     * @param Cart $cart
+     * @return LineItemCollection
+     */
+    private function findResidualProducts(Cart $cart): LineItemCollection
+    {
+        return $cart->getLineItems()->filter(function (LineItem $item) {
+            if ($item->getType() === LineItem::PRODUCT_LINE_ITEM_TYPE &&
+                $item->getPayloadValue('residualPurchase') === true) {
+                return true;
+            }
+            return false;
+        });
+    }
+
+    /**
+     * Get all discounts within the cart that are used for residual purchases
+     * @param Cart $cart
+     * @return LineItemCollection
+     */
+    private function findResidualDiscounts(Cart $cart): LineItemCollection
+    {
+        return $residualDiscounts = $cart->getLineItems()->filter(function (LineItem $item) {
+            if ($item->getType() === LineItem::CUSTOM_LINE_ITEM_TYPE &&
+                $item->getPayloadValue('residualPurchase') === true) {
+                return true;
+            }
+            return false;
+        });
+    }
+
 
     /**
      * @param string $name
@@ -225,5 +252,18 @@ class RentDiscountProcessor implements CartDataCollectorInterface, CartProcessor
         $maxNumberOfDiscounts = $this->systemConfigService->get("OsSubscriptions.config.numberOfDiscounts", $orderEntity->getSalesChannelId());
         $interval = min($existingOrderCount, $maxNumberOfDiscounts);
         return $this->systemConfigService->get("OsSubscriptions.config.rentDiscountPercentageAtInterval{$interval}", $orderEntity->getSalesChannelId());
+    }
+
+    /**
+     * Sets all shipping cost to zero
+     * @param Cart $cart
+     * @return void
+     */
+    private function removeShippingCosts(Cart $cart): void
+    {
+        foreach ($cart->getDeliveries() as $delivery) {
+            $costs = new CalculatedPrice(0.0, 0.0, new CalculatedTaxCollection(), new TaxRuleCollection());
+            $delivery->setShippingCosts($costs);
+        }
     }
 }
