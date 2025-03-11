@@ -12,7 +12,6 @@ class ProductLoadedSubscriber implements EventSubscriberInterface
 {
     //  * @param EntityRepository $productRepository
     //  * @param LoggerInterface $logger
-    public $purchaseableWhenOutOfStockProduct = false;
 
     public function __construct(
         private readonly EntityRepository $productRepository,
@@ -75,10 +74,10 @@ class ProductLoadedSubscriber implements EventSubscriberInterface
 
             // Check if the borrow product variant is available on stock
             if ($productVariant and $productVariant->getAvailableStock() > 0) {
-                // make the product purchaseable
-                $this->purchaseableWhenOutOfStockProduct = true;
                 // remove the stock notification email notification input field (from another plugin) if the product is purchaseable
-                $customFields['acris_stock_notification_email_notification_inactive'] = true;
+                if (isset($customFields['acris_stock_notification_email_notification_inactive'])) {
+                    $customFields['acris_stock_notification_email_notification_inactive'] = true;
+                }
                 $product->setCustomFields($customFields);
                 $this->productRepository->update([
                     [
