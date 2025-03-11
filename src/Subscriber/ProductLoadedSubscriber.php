@@ -11,13 +11,11 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 class ProductLoadedSubscriber implements EventSubscriberInterface
 {
     //  * @param EntityRepository $productRepository
-    //  * @param AbstractStockStorage $stockStorage
     //  * @param LoggerInterface $logger
     public $purchaseableWhenOutOfStockProduct = false;
 
     public function __construct(
         private readonly EntityRepository $productRepository,
-        // private readonly AbstractStockStorage $stockStorage,
         private readonly LoggerInterface $logger
     ) {}
 
@@ -57,7 +55,6 @@ class ProductLoadedSubscriber implements EventSubscriberInterface
                 return;
             }
 
-            // Check if the product has a borrow product variant
             // Check if the product has a borrow product variant
             if (!isset($customFields['mollie_payments_product_parent_buy_variant'])) {
                 return;
