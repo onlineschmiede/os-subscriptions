@@ -58,21 +58,6 @@ class OrderSubscriber implements EventSubscriberInterface
                 $criteria->addAssociation('lineItems');
                 $currentOrder = $this->orderRepository->search($criteria, $event->getContext());
 
-                # get all rentable product line items from the order
-                $currentOrderRentLineItems = array_filter(
-                    $currentOrder->first()->getLineItems()->getElements(),
-                    function (OrderLineItemEntity $item) {
-                        if (isset($item->getPayload()['options'])) {
-                            foreach ($item->getPayload()['options'] as $option) {
-                                if (isset($option['option']) && $option['option'] === 'Mieten') {
-                                    return true;
-                                }
-                            }
-                        }
-                        return false;
-                    }
-                );
-
                 # get all residual product line items from the order
                 $currentOrderResidualLineItems = array_filter(
                     $currentOrder->first()->getLineItems()->getElements(),
@@ -86,27 +71,8 @@ class OrderSubscriber implements EventSubscriberInterface
                     }
                 );
 
-                $lineItemsWithoutStockReduction = [];
-
-                # skip if we don't have any custom fields ready
-                if ($writeResult->getProperty('customFields') &&
-                    isset($writeResult->getProperty('customFields')['mollie_payments']))
-                {
-                    $mollieData = $writeResult->getProperty('customFields')['mollie_payments'];
-                    $criteria = (new Criteria())->addFilter(new EqualsFilter('customFields.mollie_payments.swSubscriptionId', $mollieData['swSubscriptionId']));
-                    $subscriptionInterval = count($this->orderRepository->search($criteria, $event->getContext()));
-
-                    # skip if the order is not a mollie subscription renewal
-                    # meaning we will decrease the stock of the products in the order
-                    # if it is an initial order.
-                    if ($subscriptionInterval > 1) {
-                        $lineItemsWithoutStockReduction = array_merge($lineItemsWithoutStockReduction, $currentOrderRentLineItems);
-                    }
-                }
 
                 if (count($currentOrderResidualLineItems) > 0) {
-                    $lineItemsWithoutStockReduction = array_merge($lineItemsWithoutStockReduction, $currentOrderResidualLineItems);
-
                     # if the order is a residual purchase we have to cancel the subscription
                     # but as the order is not a mollie clone we have to obtain the subscriptionId set in the payload
                     # on any residualLineItems within the new order.
@@ -134,17 +100,20 @@ class OrderSubscriber implements EventSubscriberInterface
                                 'metaData' => $subscriptionMetaData,
                             ]
                         ], $event->getContext());
-                    }
-                }
 
-                if (count($lineItemsWithoutStockReduction) > 0) {
-                    $this->stockStorage->alter(
-                        array_map(
-                            fn(OrderLineItemEntity $item) => new StockAlteration($item->getId(), $item->getProductId(), $item->getQuantity(), 0),
-                            $lineItemsWithoutStockReduction
-                        ),
-                        $event->getContext()
-                    );
+                        # persist the stock for the residual products
+                        # by increasing the stock by the quantity of the residual products
+                        # as the order was already shipped
+                        foreach ($currentOrderResidualLineItems as $lineItem) {
+                            $quantity = $lineItem->getQuantity();
+                            $productStock = $lineItem->getPayload()["stock"];
+
+                            $this->stockStorage->alter(
+                                [new StockAlteration($lineItem->getId(), $lineItem->getProductId(), $productStock + $quantity, $productStock)],
+                                $event->getContext()
+                            );
+                        }
+                    }
                 }
             }
         }

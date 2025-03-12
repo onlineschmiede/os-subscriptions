@@ -194,7 +194,7 @@ class RentDiscountProcessor implements CartDataCollectorInterface, CartProcessor
      */
     private function findResidualDiscounts(Cart $cart): LineItemCollection
     {
-        return $residualDiscounts = $cart->getLineItems()->filter(function (LineItem $item) {
+        return $cart->getLineItems()->filter(function (LineItem $item) {
             if ($item->getType() === LineItem::CUSTOM_LINE_ITEM_TYPE &&
                 $item->getPayloadValue('residualPurchase') === true) {
                 return true;
