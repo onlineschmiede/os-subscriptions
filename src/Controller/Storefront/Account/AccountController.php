@@ -4,10 +4,10 @@ namespace OsSubscriptions\Controller\Storefront\Account;
 
 use Kiener\MolliePayments\Components\Subscription\SubscriptionManager;
 use Kiener\MolliePayments\Controller\Storefront\AbstractStoreFrontController;
+use OsSubscriptions\Checkout\Cart\SubscriptionLineItem;
 use Psr\Log\LoggerInterface;
 use Shopware\Core\Checkout\Cart\Cart;
 use Shopware\Core\Checkout\Cart\LineItem\LineItem;
-use Shopware\Core\Checkout\Cart\LineItemFactoryRegistry;
 use Shopware\Core\Checkout\Cart\Price\QuantityPriceCalculator;
 use Shopware\Core\Checkout\Cart\Price\Struct\QuantityPriceDefinition;
 use Shopware\Core\Checkout\Cart\SalesChannel\CartService;
@@ -36,7 +36,6 @@ class AccountController extends AbstractStoreFrontController
         private readonly EntityRepository        $orderRepository,
         private readonly EntityRepository        $productRepository,
         private readonly CartService             $cartService,
-        private readonly LineItemFactoryRegistry $lineItemFactoryRegistry,
         private readonly QuantityPriceCalculator $quantityPriceCalculator,
         private readonly MailService             $mailService,
         private readonly EntityRepository        $emailTemplateRepository,
@@ -114,7 +113,8 @@ class AccountController extends AbstractStoreFrontController
 
         try {
             $criteria = (new Criteria())->addFilter(new EqualsFilter('customFields.mollie_payments.swSubscriptionId', $subscriptionId));
-            $criteria->addAssociation('lineItems.product');
+            $criteria->addAssociation('lineItems.product.parentProduct');
+            $criteria->addAssociation('lineItems.price.taxRules');
             $criteria->addAssociation('deliveries');
             $criteria->addAggregation(new SumAggregation('sum-amountTotal', 'amountTotal'));
             $criteria->addAggregation(new SumAggregation('sum-amountNet', 'amountNet'));
@@ -132,6 +132,13 @@ class AccountController extends AbstractStoreFrontController
                 );
             }
 
+            # to prevent any edge cases we will clear the cart first
+            foreach ($cart->getLineItems() as $key => $cartLineItem) {
+                if ($cart->get($key)) {
+                    $this->cartService->remove($cart, $cartLineItem->getId(), $salesChannelContext);
+                }
+            }
+
             foreach ($initialOrder->getLineItems() as $orderLineItem) {
                 $hasRentalOption = array_reduce(
                     $orderLineItem->getPayload()['options'],
@@ -142,6 +149,13 @@ class AccountController extends AbstractStoreFrontController
                 if (!$hasRentalOption) {
                     continue;
                 }
+
+//                $salesChannelContext->setPermissions([
+//                    ProductCartProcessor::SKIP_PRODUCT_RECALCULATION,
+//                    ProductCartProcessor::SKIP_PRODUCT_STOCK_VALIDATION,
+//                    "skipDeliveryPriceRecalculation",
+//                    "skipDeliveryRecalculation",
+//                ]);
 
                 $nonRentableLineItem = $this->getRelatedLineItemByOrderLineEntity($orderLineItem, $salesChannelContext, $subscriptionId);
                 $this->cartService->add($cart, $nonRentableLineItem, $salesChannelContext);
@@ -206,7 +220,7 @@ class AccountController extends AbstractStoreFrontController
      */
     private function getResidualDiscountLineItem(EntitySearchResult $orders, SalesChannelContext $salesChannelContext, string $subscriptionId): LineItem
     {
-        $discountLineItem = new LineItem(Uuid::randomHex(), LineItem::CUSTOM_LINE_ITEM_TYPE);
+        $discountLineItem = new LineItem(Uuid::randomHex(), SubscriptionLineItem::DISCOUNT_RESIDUAL_TYPE);
 
         $discountLineItem->setLabel('Restkauf Rabatt auf Abonnement');
         $discountLineItem->setDescription('Restkauf Rabatt auf Abonnement');
@@ -228,9 +242,17 @@ class AccountController extends AbstractStoreFrontController
         $acknowledgedPaymentSum = ($sumAmountTotal - $sumShippingTotal) * ($sumAmountNet / $sumAmountTotal);
         $discount = $acknowledgedPaymentSum * (0.01 * $acknowledgedPaymentPercentage);
 
+        $taxRule = null;
+        foreach($orders->first()->getPrice()->getTaxRules()->getElements() as $tax)
+        {
+            if(!$taxRule) {
+                $taxRule = $tax;
+            }
+        }
+
         $definition = new QuantityPriceDefinition(
-            $discount * -1,
-            new TaxRuleCollection([new TaxRule(0)]),
+            ($discount * -1) * (($taxRule->getTaxRate() / $taxRule->getPercentage()) + 1),
+            new TaxRuleCollection([new TaxRule($taxRule->getTaxRate(), $taxRule->getPercentage())]),
             1
         );
 
@@ -251,22 +273,52 @@ class AccountController extends AbstractStoreFrontController
      */
     private function getRelatedLineItemByOrderLineEntity(OrderLineItemEntity $orderLineItemEntity, SalesChannelContext $salesChannelContext, string $subscriptionId): LineItem
     {
+        $orderLineItemProductParentId = $orderLineItemEntity->getProduct()->getParentId();
         $criteria = new Criteria();
-        $criteria->addFilter(new EqualsFilter('parentId', $orderLineItemEntity->getProduct()->getParentId()));
+        $criteria->addFilter(new EqualsFilter('parentId', $orderLineItemProductParentId));
         $criteria->addFilter(new EqualsFilter('options.name', 'Kaufen'));
         $criteria->addAssociation('options');
 
-        $parentProduct = $this->productRepository->search($criteria, $salesChannelContext->getContext());
+        $productBuyVariant = $this->productRepository->search($criteria, $salesChannelContext->getContext())->first();
 
-        return $this->lineItemFactoryRegistry->create([
-            'type' => LineItem::PRODUCT_LINE_ITEM_TYPE,
-            'referencedId' => $parentProduct->first()->getId(),
-            'quantity' => $orderLineItemEntity->getQuantity(),
-            'payload' => [
-                'residualPurchase' => true,
-                'mollieSubscriptionId' => $subscriptionId,
-            ]
-        ], $salesChannelContext);
+        $lineItem = new LineItem(Uuid::randomHex(), SubscriptionLineItem::PRODUCT_RESIDUAL_TYPE);
+        $lineItem->setLabel($productBuyVariant->getTranslation('name') . ' (Restkauf)');
+        $lineItem->setDescription($productBuyVariant->getTranslation('description'));
+
+        $lineItem->setReferencedId($productBuyVariant->getId());
+        $lineItem->setGood(false);
+        $lineItem->setStackable(true);
+        $lineItem->setRemovable(true);
+        $lineItem->setDeliveryInformation(null);
+
+        $payload = [];
+        $payload['residualPurchase'] = true;
+        $payload['mollieSubscriptionId'] = $subscriptionId;
+        $payload['parentId'] = $orderLineItemProductParentId;
+        $payload['productNumber'] = $productBuyVariant->getProductNumber();
+        $payload['manufacturerId'] = $productBuyVariant->getManufacturerId();
+        $payload['options'] = [];
+
+        foreach($orderLineItemEntity->getPayload()['options'] as $key => $option) {
+            if($option['group'] === 'Kaufen oder mieten?') {
+                $option['option'] = 'Kaufen';
+                $payload['options'][$key] = $option;
+            }
+        }
+        $lineItem->setPayload($payload);
+
+        $lineItem->setQuantity($orderLineItemEntity->getQuantity());
+        $definition = new QuantityPriceDefinition(
+            $productBuyVariant->getPrice()->first()->getGross(),
+            $orderLineItemEntity->getPrice()->getTaxRules(),
+            $orderLineItemEntity->getQuantity()
+        );
+        $lineItem->setPriceDefinition($definition);
+        $lineItem->setPrice(
+            $this->quantityPriceCalculator->calculate($definition, $salesChannelContext)
+        );
+
+        return $lineItem;
     }
 
     /**

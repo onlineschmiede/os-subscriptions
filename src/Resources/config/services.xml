@@ -9,10 +9,15 @@
             <argument type="string">os-subscriptions</argument>
         </service>
 
-        <service id="OsSubscriptions\Checkout\Cart\RentDiscountProcessor">
+        <service id="OsSubscriptions\Checkout\Cart\SubscriptionCartProcessor">
             <argument type="service" id="Shopware\Core\Checkout\Cart\Price\PercentagePriceCalculator"/>
             <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
             <argument type="service" id="order.repository"/>
+            <tag name="shopware.cart.processor" priority="4500" />
+            <tag name="shopware.cart.collector" priority="4500" />
+        </service>
+
+        <service id="OsSubscriptions\Checkout\Cart\ResidualCartProcessor">
             <tag name="shopware.cart.processor" priority="4500" />
             <tag name="shopware.cart.collector" priority="4500" />
         </service>
@@ -54,7 +59,6 @@
             <argument type="service" id="order.repository"/>
             <argument type="service" id="product.repository"/>
             <argument type="service" id="Shopware\Core\Checkout\Cart\SalesChannel\CartService"/>
-            <argument type="service" id="Shopware\Core\Checkout\Cart\LineItemFactoryRegistry"/>
             <argument type="service" id="Shopware\Core\Checkout\Cart\Price\QuantityPriceCalculator"/>
             <argument type="service" id="Shopware\Core\Content\Mail\Service\MailService"/>
             <argument type="service" id="mail_template.repository"/>

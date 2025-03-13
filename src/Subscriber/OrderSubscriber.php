@@ -3,8 +3,8 @@
 namespace OsSubscriptions\Subscriber;
 
 use Kiener\MolliePayments\Components\Subscription\SubscriptionManager;
+use OsSubscriptions\Checkout\Cart\SubscriptionLineItem;
 use Psr\Log\LoggerInterface;
-use Shopware\Core\Checkout\Cart\LineItem\LineItem;
 use Shopware\Core\Checkout\Order\Aggregate\OrderLineItem\OrderLineItemEntity;
 use Shopware\Core\Checkout\Order\OrderEvents;
 use Shopware\Core\Content\Product\Stock\AbstractStockStorage;
@@ -62,9 +62,7 @@ class OrderSubscriber implements EventSubscriberInterface
                 $currentOrderResidualLineItems = array_filter(
                     $currentOrder->first()->getLineItems()->getElements(),
                     function (OrderLineItemEntity $item) {
-                        if (isset($item->getPayload()['residualPurchase']) &&
-                            $item->getPayload()['residualPurchase'] === true &&
-                            $item->getType() === LineItem::PRODUCT_LINE_ITEM_TYPE) {
+                        if ($item->getType() === SubscriptionLineItem::PRODUCT_RESIDUAL_TYPE) {
                             return true;
                         }
                         return false;
