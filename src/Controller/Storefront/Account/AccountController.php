@@ -11,6 +11,8 @@ use Shopware\Core\Checkout\Cart\LineItemFactoryRegistry;
 use Shopware\Core\Checkout\Cart\Price\QuantityPriceCalculator;
 use Shopware\Core\Checkout\Cart\Price\Struct\QuantityPriceDefinition;
 use Shopware\Core\Checkout\Cart\SalesChannel\CartService;
+use Shopware\Core\Checkout\Cart\Tax\Struct\TaxRule;
+use Shopware\Core\Checkout\Cart\Tax\Struct\TaxRuleCollection;
 use Shopware\Core\Checkout\Customer\CustomerEntity;
 use Shopware\Core\Checkout\Order\Aggregate\OrderLineItem\OrderLineItemEntity;
 use Shopware\Core\Content\Mail\Service\MailService;
@@ -114,7 +116,9 @@ class AccountController extends AbstractStoreFrontController
             $criteria = (new Criteria())->addFilter(new EqualsFilter('customFields.mollie_payments.swSubscriptionId', $subscriptionId));
             $criteria->addAssociation('lineItems.product');
             $criteria->addAssociation('deliveries');
+            $criteria->addAggregation(new SumAggregation('sum-amountTotal', 'amountTotal'));
             $criteria->addAggregation(new SumAggregation('sum-amountNet', 'amountNet'));
+            $criteria->addAggregation(new SumAggregation('sum-shippingTotal', 'shippingTotal'));
             $orders = $this->orderRepository->search($criteria, $salesChannelContext->getContext());
 
             $initialOrder = $orders->first();
@@ -218,11 +222,15 @@ class AccountController extends AbstractStoreFrontController
             ->get("OsSubscriptions.config.residualPurchaseAcknowledgedPaymentPercentage",
                 $salesChannelContext->getSalesChannel()->getId());
 
-        $discount = $orders->getAggregations()->get('sum-amountNet')->getSum() * (0.01 * $acknowledgedPaymentPercentage);
+        $sumAmountTotal = $orders->getAggregations()->get('sum-amountTotal')->getSum();
+        $sumAmountNet = $orders->getAggregations()->get('sum-amountNet')->getSum();
+        $sumShippingTotal = $orders->getAggregations()->get('sum-shippingTotal')->getSum();
+        $acknowledgedPaymentSum = ($sumAmountTotal - $sumShippingTotal) * ($sumAmountNet / $sumAmountTotal);
+        $discount = $acknowledgedPaymentSum * (0.01 * $acknowledgedPaymentPercentage);
 
         $definition = new QuantityPriceDefinition(
             $discount * -1,
-            $orders->getEntities()->first()->getPrice()->getTaxRules(),
+            new TaxRuleCollection([new TaxRule(0)]),
             1
         );
 

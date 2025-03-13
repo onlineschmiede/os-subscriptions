@@ -82,8 +82,8 @@ class RentDiscountProcessor implements CartDataCollectorInterface, CartProcessor
      */
     public function process(CartDataCollection $data, Cart $original, Cart $toCalculate, SalesChannelContext $context, CartBehavior $behavior): void
     {
+        $this->removeInvalidResidualDiscounts($original);
         if($this->findResidualProducts($original)->count() > 0) {
-            $this->removeInvalidResidualDiscounts($original);
             $this->removeShippingCosts($original);
         }
 
@@ -132,7 +132,7 @@ class RentDiscountProcessor implements CartDataCollectorInterface, CartProcessor
 
         # if there are residual discounts, but no residual products,
         # we can remove all residual discounts.
-        if ($residualProducts->count() < 1 && $residualDiscounts->count() > 0) {
+        if ($residualProducts->count() !== $residualDiscounts->count()) {
             foreach ($residualDiscounts as $key => $residualDiscount) {
                 $cart->remove($key);
             }
