@@ -35,8 +35,12 @@
     <div class="order-wrapper">
         <div class="order-item-header">
             <div class="row flex-wrap">
-                <p><strong>Rücksendung angekündigt:</strong> {{ attribute(metadata, 'cancellation_initialized_at') is not empty ? attribute(metadata, 'cancellation_initialized_at')|date('d.m.Y H:i', 'Europe/Vienna') : 'N/A' }}</p>
-                <p><strong>Rücksendung erhalten:</strong> {{ attribute(metadata, 'cancellation_reviewed_at') is not empty ? attribute(metadata, 'cancellation_reviewed_at')|date('d.m.Y H:i', 'Europe/Vienna') : 'N/A' }}</p>
+                {% if attribute(metadata, 'cancellation_initialized_at') is not empty %}
+                    <p><strong>Rücksendung angekündigt:</strong> {{ attribute(metadata, 'cancellation_initialized_at')|date('d.m.Y H:i', 'Europe/Vienna') }}</p>
+                {% endif %}
+                {% if attribute(metadata, 'cancellation_reviewed_at') is not empty %}
+                    <p><strong>Rücksendung erhalten:</strong> {{ attribute(metadata, 'cancellation_reviewed_at')|date('d.m.Y H:i', 'Europe/Vienna') }}</p>
+                {% endif %}
                 <div class='row flex-wrap' style="padding-top: 12px;padding-left:-12px;">
                     {% if metadata['cancellation_initialized_at'] is not defined or metadata['cancellation_initialized_at'] is empty %}
                         <button type="button" class="btn btn-primary col-6" data-bs-toggle="modal" data-bs-target="#exampleModal">
