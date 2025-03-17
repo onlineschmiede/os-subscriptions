@@ -70,9 +70,14 @@
             <argument type="service" id="os.subscriptions.logger" />
         </service>
 
-        <service id="OsSubscriptions\Subscriber\ProductLoadedSubscriber">
+        <service id="OsSubscriptions\Subscriber\RentProductLoadedSubscriber">
             <argument type="service" id="product.repository"/>
             <argument type="service" id="os.subscriptions.logger" />
+            <tag name="kernel.event_subscriber"/>
+        </service>
+
+        <service id="OsSubscriptions\Subscriber\RentProductsListingSubscriber">
+            <argument type="service" id="product.repository"/>
             <tag name="kernel.event_subscriber"/>
         </service>
     </services>
