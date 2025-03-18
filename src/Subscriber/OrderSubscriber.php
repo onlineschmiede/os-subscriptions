@@ -196,6 +196,59 @@ class OrderSubscriber implements EventSubscriberInterface
 
                     if ($product) {
                         // Perform actions with the product
+
+                        $customFields = $product->getCustomFields();
+
+                        if (!$customFields or !isset($customFields['mollie_payments_product_subscription_enabled'])) {
+                            return;
+                        }
+                        // Check if the product is a subscription product
+                        $isSubscriptionProduct = true === $customFields['mollie_payments_product_subscription_enabled'] ? true : false;
+
+                        if (!$isSubscriptionProduct) {
+                            return;
+                        }
+
+                        // Check if the product has a borrow product variant
+                        if (!isset($customFields['mollie_payments_product_parent_buy_variant'])) {
+                            return;
+                        }
+
+                        $borrowProductVariantId = $customFields['mollie_payments_product_parent_buy_variant'];
+
+                        if (!$borrowProductVariantId) {
+                            return;
+                        }
+
+                        // search for the borrow product variant
+                        $context = Context::createDefaultContext();
+                        $criteria = new Criteria([$borrowProductVariantId]);
+                        $criteria->addAssociation('customFields');
+
+                        $productBorrowVariant = $this->productRepository->search($criteria, $context)->first();
+
+                        // Check if the borrow product variant is available on stock
+                        if ($productBorrowVariant and $productBorrowVariant->getAvailableStock() > 0) {
+                            // make the product purchaseable
+                            return true;
+                        }
+
+                        // now swap the product stock like this; substract sthe stock from productBorrowVariant by the line item quantity and add it to the product
+
+                        $productBorrowVariant->setAvailableStock($productBorrowVariant->getAvailableStock() - $lineItem->getQuantity());
+                        $product->setAvailableStock($product->getAvailableStock() + $lineItem->getQuantity());
+
+                        // Update the product stock
+                        $this->productRepository->update([
+                            [
+                                'id' => $productBorrowVariant->getId(),
+                                'availableStock' => $productBorrowVariant->getAvailableStock(),
+                            ],
+                            [
+                                'id' => $product->getId(),
+                                'availableStock' => $product->getAvailableStock(),
+                            ],
+                        ], $context);
                     }
                 }
             }
