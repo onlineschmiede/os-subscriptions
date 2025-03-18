@@ -266,14 +266,14 @@ class AccountController extends AbstractStoreFrontController
 
     /**
      * Returns related "non-rentable" LineItem that can be added to cart
-     * @param OrderLineItemEntity $orderLineItemEntity
+     * @param OrderLineItemEntity $rentOrderLineItem
      * @param SalesChannelContext $salesChannelContext
      * @param string $subscriptionId
      * @return LineItem
      */
-    private function getRelatedLineItemByOrderLineEntity(OrderLineItemEntity $orderLineItemEntity, SalesChannelContext $salesChannelContext, string $subscriptionId): LineItem
+    private function getRelatedLineItemByOrderLineEntity(OrderLineItemEntity $rentOrderLineItem, SalesChannelContext $salesChannelContext, string $subscriptionId): LineItem
     {
-        $orderLineItemProductParentId = $orderLineItemEntity->getProduct()->getParentId();
+        $orderLineItemProductParentId = $rentOrderLineItem->getProduct()->getParentId();
         $criteria = new Criteria();
         $criteria->addFilter(new EqualsFilter('parentId', $orderLineItemProductParentId));
         $criteria->addFilter(new EqualsFilter('options.name', 'Kaufen'));
@@ -282,10 +282,10 @@ class AccountController extends AbstractStoreFrontController
         $productBuyVariant = $this->productRepository->search($criteria, $salesChannelContext->getContext())->first();
 
         $lineItem = new LineItem(Uuid::randomHex(), SubscriptionLineItem::PRODUCT_RESIDUAL_TYPE);
-        $lineItem->setLabel($productBuyVariant->getTranslation('name') . ' (Restkauf)');
-        $lineItem->setDescription($productBuyVariant->getTranslation('description'));
+        $lineItem->setLabel($rentOrderLineItem->getProduct()->getTranslation('name') . ' (Restkauf)');
+        $lineItem->setDescription($rentOrderLineItem->getProduct()->getTranslation('description'));
 
-        $lineItem->setReferencedId($productBuyVariant->getId());
+        $lineItem->setReferencedId($rentOrderLineItem->getProduct()->getId());
         $lineItem->setGood(false);
         $lineItem->setStackable(true);
         $lineItem->setRemovable(true);
@@ -295,23 +295,17 @@ class AccountController extends AbstractStoreFrontController
         $payload['residualPurchase'] = true;
         $payload['mollieSubscriptionId'] = $subscriptionId;
         $payload['parentId'] = $orderLineItemProductParentId;
-        $payload['productNumber'] = $productBuyVariant->getProductNumber();
-        $payload['manufacturerId'] = $productBuyVariant->getManufacturerId();
-        $payload['options'] = [];
+        $payload['productNumber'] = $rentOrderLineItem->getProduct()->getProductNumber();
+        $payload['manufacturerId'] = $rentOrderLineItem->getProduct()->getManufacturerId();
+        $payload['options'] = $rentOrderLineItem->getPayload()['options'] ?? [];
 
-        foreach($orderLineItemEntity->getPayload()['options'] as $key => $option) {
-            if($option['group'] === 'Kaufen oder mieten?') {
-                $option['option'] = 'Kaufen';
-                $payload['options'][$key] = $option;
-            }
-        }
         $lineItem->setPayload($payload);
 
-        $lineItem->setQuantity($orderLineItemEntity->getQuantity());
+        $lineItem->setQuantity($rentOrderLineItem->getQuantity());
         $definition = new QuantityPriceDefinition(
             $productBuyVariant->getPrice()->first()->getGross(),
-            $orderLineItemEntity->getPrice()->getTaxRules(),
-            $orderLineItemEntity->getQuantity()
+            $rentOrderLineItem->getPrice()->getTaxRules(),
+            $rentOrderLineItem->getQuantity()
         );
         $lineItem->setPriceDefinition($definition);
         $lineItem->setPrice(
