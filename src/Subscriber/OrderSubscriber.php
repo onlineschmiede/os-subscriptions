@@ -120,19 +120,32 @@ class OrderSubscriber implements EventSubscriberInterface
     {
         $customFields = $order->getCustomFields();
         $hasMolliePayments = $customFields['mollie_payments'] ?? false;
+
+        # ensure we only process if mollie_payments are set
         if(!$hasMolliePayments) {
             return;
         }
 
         $shouldUpdate = false;
-        $subscriptionId = $customFields['mollie_payments']['swSubscriptionId'] ?? null;
 
         if (count($this->getResidualOrderLineItems($order)) > 0) {
             $shouldUpdate = !isset($customFields['os_subscriptions']['order_type']);
             $customFields["os_subscriptions"]["order_type"] = "residual";
+
+            # obtain the subscriptionId from any residualLineItems within the new order
+            # which are set within the AccountController. Otherwise we can't reference the subscription.
+            $subscriptionId = array_reduce(
+                $this->getResidualOrderLineItems($order),
+                fn($carry, OrderLineItemEntity $item) => $carry ?: ($item->getPayload()['mollieSubscriptionId'] ?? null),
+                null
+            );
             $customFields["os_subscriptions"]["subscription_id"] = $subscriptionId;
         } elseif (count($this->getRentOrderLineItems($order)) > 0) {
             $shouldUpdate = !isset($customFields['os_subscriptions']['order_type']);
+
+            # here we can access safely the subscriptionId as a renewals is always copied
+            # from the initial order.
+            $subscriptionId = $customFields['mollie_payments']['swSubscriptionId'];
 
             $criteria = (new Criteria())->addFilter(new EqualsFilter('customFields.mollie_payments.swSubscriptionId', $subscriptionId));
             $existingOrderCount = count($this->orderRepository->search($criteria, $context));
