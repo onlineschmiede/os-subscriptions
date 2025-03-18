@@ -66,7 +66,7 @@ curl -X POST --location "https://test.babyrella.at/mollie/webhook/subscription/s
 
 > [!IMPORTANT]
 > If you are finished testing the renewal process, keep in mind that you have to revert those changes back, otherwise
-> the subscription will not be activated.
+> the subscription will not be activated and vice versa. Also you might want to wait 30 seconds after each call...
 
 
 ## dev: test residual purchase

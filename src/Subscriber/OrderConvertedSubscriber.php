@@ -8,6 +8,7 @@ use Shopware\Core\Checkout\Cart\Order\OrderConvertedEvent;
 use Shopware\Core\Checkout\Order\OrderEntity;
 use Shopware\Core\Content\Product\Stock\AbstractStockStorage;
 use Shopware\Core\Content\Product\Stock\StockAlteration;
+use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
@@ -59,50 +60,34 @@ class OrderConvertedSubscriber implements EventSubscriberInterface
     public function onOrderConverted(OrderConvertedEvent $event): void
     {
         try {
-            if ($this->shouldProcess($event)) {
-                $this->refillEmptyProductStockByOrderQuantity($event);
+            $mollieSubscriptionId = $event->getOrder()->getCustomFields()["mollie_payments"]["swSubscriptionId"] ?? false;
+            if(!$mollieSubscriptionId) {
+                return;
             }
 
+            $initialMollieOrder = $this->getInitialMollieOrder($mollieSubscriptionId, $event->getContext());
+            if($this->subscriptionAlreadyProcessed($initialMollieOrder, $event->getContext())) {
+                return;
+            }
+
+            $this->refillEmptyProductStockByOrderQuantity($initialMollieOrder, $event->getContext());
         } catch (\Exception $e) {
             $this->logger->error($e->getMessage());
         }
     }
 
     /**
-     * The OrderConvertedEvent is actually called several times but we have to ensure
-     * that the condition is only applied once within the given context.
-     * Which in fact is the renewal of the subscriptions.
-     * @param OrderConvertedEvent $event
-     * @return bool
-     */
-    private function shouldProcess(OrderConvertedEvent $event): bool
-    {
-        $order = $this->getOrderEntity($event);
-        $mollieSubscriptionId = $order->getCustomFields()["mollie_payments"]["swSubscriptionId"] ?? false;
-
-        # only process mollie subscriptions
-        if (!$mollieSubscriptionId) {
-            return false;
-        }
-
-        # prevent repeated execution
-        $initialOrderWasCloned = $order->getCustomFields()["mollie_payments"]["order_id"] ?? false;
-        if ($initialOrderWasCloned) {
-            return !$this->subscriptionAlreadyProcessed($mollieSubscriptionId, $event);
-        }
-
-        return false;
-    }
-
-    /**
-     * Increases the stock by the product quantity so mollie can process safely
-     * @param OrderConvertedEvent $event
+     * Increases the stock by the product quantity so mollie can process safely.
+     * This is mainly due to the fact that mollie will remove all orderLineItems
+     * if the stock is below the quantity of the orderLineItem. So we have to
+     * artificially bump it, mark the order and reduce it within another subscriber (MollieSubscriptionHistorySubscriber)
+     * @param OrderEntity $order
+     * @param Context $context
      * @return void
      */
-    private function refillEmptyProductStockByOrderQuantity(OrderConvertedEvent $event)
+    private function refillEmptyProductStockByOrderQuantity(OrderEntity $order, Context $context): void
     {
-        $order = $event->getOrder();
-        $context = $event->getContext();
+        $stockModified = false;
 
         foreach ($order->getLineItems() as $lineItem) {
             if ($lineItem->getType() !== LineItem::PRODUCT_LINE_ITEM_TYPE) {
@@ -110,66 +95,96 @@ class OrderConvertedSubscriber implements EventSubscriberInterface
             }
 
             $referenceProduct = $this->productRepository->search(new Criteria([$lineItem->getProductId()]), $context)->first();
-            $realProductStock = $referenceProduct->getStock();
-
+            $productStock = $referenceProduct->getStock();
             $quantity = $lineItem->getQuantity();
-            $productStock = $lineItem->getPayload()["stock"];
 
-            if ($realProductStock < $quantity) {
-                # persist the stock storage, so no changes will take effect
+            if ($quantity <= $productStock) {
+                # here we can safely delegate the stock bump for renewals to the MollieSubscriptionHistorySubscriber
+                # as we only need to handle edge cases
+                continue;
+            }
+
+            # if the stock is zero, we have to increase it to the quantity of the orderLineItem
+            # which again get reduced in the MollieSubscriptionHistorySubscriber subscriber.
+            if ($productStock === 0) {
                 $this->stockStorage->alter(
                     [new StockAlteration($lineItem->getId(), $lineItem->getProductId(), $productStock + $quantity, $productStock)],
                     $context
                 );
-
-                # mark the order that the stock was increased for MollieSubscriptionHistorySubscriber
-                $customFields = $order->getCustomFields();
-                $customFields["os_subscriptions"]["stock_increased"] = true;
-                $this->orderRepository->update([
-                    [
-                        'id' => $order->getId(),
-                        'customFields' => $customFields,
-                    ]
-                ], $event->getContext());
             }
+
+            # if the stock is below zero, we have to set it to zero and increase it by the quantity of the orderLineItem
+            if($productStock < 0) {
+                $this->logger->error("Product stock is below zero. Product: {$referenceProduct->getName()} Stock: {$productStock} Quantity: {$quantity} OrderId: {$order->getId()}");
+                $this->logger->error("Setting stock to from negative to 0 + {$quantity} for product {$referenceProduct->getName()} so mollie can process.");
+                $this->stockStorage->alter(
+                    [new StockAlteration($lineItem->getId(), $lineItem->getProductId(), ($productStock * -1), $quantity * -1)],
+                    $context
+                );
+            }
+
+            $stockModified = true;
+        }
+
+        if($stockModified) {
+            $customFields = $order->getCustomFields();
+            $customFields["os_subscriptions"]["stock_increased"] = true;
+            $this->orderRepository->update([
+                [
+                    'id' => $order->getId(),
+                    'customFields' => $customFields,
+                ]
+            ], $context);
         }
     }
 
     /**
-     * Retrieve the order manually to have all customFields present
-     * @param OrderConvertedEvent $event
+     * Retrieve the order manually to have all customFields present.
+     * This is due the fact that the order obtained within the event does
+     * get casted through a mollie based struct and omitting custom sets.
+     * @param string $mollieSubscriptionId
+     * @param Context $context
      * @return OrderEntity
      */
-    private function getOrderEntity(OrderConvertedEvent $event): OrderEntity
+    private function getInitialMollieOrder(string $mollieSubscriptionId, Context $context): OrderEntity
     {
-        $mollieSubscriptionId = $event->getOrder()->getCustomFields()["mollie_payments"]["swSubscriptionId"];
-
         $criteria = new Criteria();
         $criteria->addAssociation('customFields');
+        $criteria->addAssociation('lineItems');
         $criteria->addFilter(new EqualsFilter('customFields.mollie_payments.swSubscriptionId', $mollieSubscriptionId));
-        return $this->orderRepository->search($criteria, $event->getContext())->first();
+
+        return $this->orderRepository->search($criteria,$context)->first();
     }
 
+
     /**
-     * Helper for several edge cases
-     * ! includes time based logic -> 60 seconds
-     * @param string $mollieSubscriptionId
-     * @param OrderConvertedEvent $event
+     * As this subscriber is called sever times, we have to ensure that
+     * we can operate safely ONCE within repeated executions.
+     * ! includes time based logic -> 30 seconds
+     * @param OrderEntity $order
+     * @param Context $context
      * @return bool
      */
-    private function subscriptionAlreadyProcessed(string $mollieSubscriptionId, OrderConvertedEvent $event): bool
+    private function subscriptionAlreadyProcessed(OrderEntity $order, Context $context): bool
     {
+        $mollieSubscriptionId = $order->getCustomFields()["mollie_payments"]["swSubscriptionId"];
+
         $criteria = new Criteria();
         $criteria->addFilter(new EqualsFilter('subscriptionId', $mollieSubscriptionId));
         $criteria->addSorting(new FieldSorting('createdAt', FieldSorting::DESCENDING));
         $criteria->setLimit(1);
-        $subscriptions = $this->subscriptionHistoryRepository->search($criteria, $event->getContext());
+        $subscriptions = $this->subscriptionHistoryRepository->search($criteria, $context);
 
         if (count($subscriptions) < 1) {
             return false;
         }
 
         $latestHistory = $subscriptions->first();
+
+        # initial purchases for subscriptions should not be processed / stock adjusted
+        if($latestHistory->get('comment') === "created") {
+            return true;
+        }
 
         $now = new \DateTime();
         $created = $latestHistory->getCreatedAt();
@@ -181,5 +196,4 @@ class OrderConvertedSubscriber implements EventSubscriberInterface
         # hope and pray
         return $diffInSeconds < $thresholdSeconds;
     }
-
 }

@@ -48,6 +48,7 @@
         <service id="OsSubscriptions\Subscriber\MollieSubscriptionHistorySubscriber">
             <argument type="service" id="order.repository"/>
             <argument type="service" id="Shopware\Core\Content\Product\Stock\StockStorage"/>
+            <argument type="service" id="product.repository"/>
             <argument type="service" id="os.subscriptions.logger" />
             <tag name="kernel.event_subscriber"/>
         </service>

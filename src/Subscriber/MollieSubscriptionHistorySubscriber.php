@@ -22,11 +22,13 @@ class MollieSubscriptionHistorySubscriber implements EventSubscriberInterface
     /**
      * @param EntityRepository $orderRepository
      * @param AbstractStockStorage $stockStorage
+     * @param EntityRepository $productRepository
      * @param LoggerInterface $logger
      */
     public function __construct(
         private readonly EntityRepository     $orderRepository,
         private readonly AbstractStockStorage $stockStorage,
+        private readonly EntityRepository     $productRepository,
         private readonly LoggerInterface      $logger
     )
     {
@@ -98,8 +100,9 @@ class MollieSubscriptionHistorySubscriber implements EventSubscriberInterface
                     continue;
                 }
 
+                $referenceProduct = $this->productRepository->search(new Criteria([$lineItem->getProductId()]), $context)->first();
+                $productStock = $referenceProduct->getStock();
                 $quantity = $lineItem->getQuantity();
-                $productStock = $lineItem->getPayload()["stock"];
 
                 # persist the stock storage, so no changes will take effect
                 $this->stockStorage->alter(
