@@ -62,11 +62,16 @@ class MollieSubscriptionHistorySubscriber implements EventSubscriberInterface
             // in our OrderConvertedSubscriber, we have to skip this step - as it's already done.
             $customFields = $order->getCustomFields();
 
-            // skip initial orders
-            if (isset($customFields['os_subscriptions']['order_type']) && 'initial' == $customFields['os_subscriptions']['order_type']) {
+            // REVIEW: should I skip the order if its initial one since it's not a renewal?
+            // skip initial and residual orders
+            if (!isset($customFields['os_subscriptions']['order_type'])
+            or (isset($customFields['os_subscriptions']['order_type']) && 'initial' == $customFields['os_subscriptions']['order_type'])
+            or (isset($customFields['os_subscriptions']['order_type']) && 'residual' == $customFields['os_subscriptions']['order_type'])
+            ) {
                 continue;
             }
 
+            // REVIEW: is this correct?
             $stockIncreasedBefore = $customFields['os_subscriptions']['stock_increased'] ?? false;
             if ($stockIncreasedBefore) {
                 $customFields['os_subscriptions']['stock_increased'] = false;
