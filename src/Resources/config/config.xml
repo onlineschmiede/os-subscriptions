@@ -27,7 +27,7 @@
             <label lang="de-DE">Prozentsatz welcher für bestehende Zahlungen angerechnet werden soll. (%)</label>
             <helpText>Enter value (in decimal format 80.0)</helpText>
             <helpText lang="de-DE">Wert eingeben (im Dezimalformat 80.0)</helpText>
-            <defaultValue>6</defaultValue>
+            <defaultValue>80</defaultValue>
         </input-field>
     </card>
 
@@ -102,7 +102,7 @@
                     <name>11</name>
                     <name lang="de-DE">11</name>
                 </option>
-                <option>
+                <option selected="true">
                     <id>12</id>
                     <name>12</name>
                     <name lang="de-DE">12</name>

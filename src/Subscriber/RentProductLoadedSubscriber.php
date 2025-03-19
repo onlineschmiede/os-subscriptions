@@ -49,13 +49,13 @@ class RentProductLoadedSubscriber implements EventSubscriberInterface
             $combinedAvailableStock = 0;
 
             // Check if the product stock is available
-            $availableStock = $product->getAvailableStock();
+            // $availableStock = $product->getAvailableStock();
 
-            $combinedAvailableStock += $availableStock;
+            // if ($availableStock > 0) {
+            //     return;
+            // }
 
-            if ($availableStock > 0) {
-                return;
-            }
+            // $combinedAvailableStock += $availableStock;
 
             // Check if the product has a borrow product variant
             if (!isset($customFields['mollie_payments_product_parent_buy_variant'])) {
@@ -91,6 +91,11 @@ class RentProductLoadedSubscriber implements EventSubscriberInterface
 
             // Edit the max purchase of the product (not sure if this is from element template or standard shopware field)
             $product->setCalculatedMaxPurchase($combinedAvailableStock);
+
+            // set available stock to the combined available stock
+            $product->setAvailableStock($combinedAvailableStock);
+            // set stock to the combined available stock
+            $product->setStock($combinedAvailableStock);
 
             // Update the product custom fields
             $product->setCustomFields($customFields);

@@ -5,8 +5,15 @@
            xsi:schemaLocation="http://symfony.com/schema/dic/services http://symfony.com/schema/dic/services/services-1.0.xsd">
     <services>
         <service id="os.subscriptions.logger" class="Monolog\Logger">
-            <factory service="Shopware\Core\Framework\Log\LoggerFactory" method="createRotating"/>
+            <!-- <factory service="Shopware\Core\Framework\Log\LoggerFactory" method="createRotating"/> -->
             <argument type="string">os-subscriptions</argument>
+            <argument type="collection">
+                <argument type="service" id="os.subscriptions.rotatingHandler"/>
+            </argument>
+        </service>
+
+        <service id="os.subscriptions.rotatingHandler" class="Monolog\Handler\RotatingFileHandler">
+            <argument type="string">%kernel.logs_dir%/os-subscriptions-%kernel.environment%.log</argument>
         </service>
 
         <service id="OsSubscriptions\Checkout\Cart\SubscriptionCartProcessor">
@@ -77,6 +84,15 @@
 
         <service id="OsSubscriptions\Subscriber\RentProductsListingSubscriber">
             <argument type="service" id="product.repository"/>
+            <tag name="kernel.event_subscriber"/>
+        </service>
+
+        <service id="OsSubscriptions\Subscriber\RentOrderTransactionSubscriber">
+            <argument type="service" id="os.subscriptions.logger" />
+            <argument type="service" id="order.repository"/>
+            <argument type="service" id="product.repository"/>
+            <argument type="service" id="state_machine_state.repository"/>
+            <argument type="service" id="order_transaction.repository"/>
             <tag name="kernel.event_subscriber"/>
         </service>
     </services>
