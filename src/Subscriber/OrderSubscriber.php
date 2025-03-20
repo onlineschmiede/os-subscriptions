@@ -49,9 +49,10 @@ class OrderSubscriber implements EventSubscriberInterface
                 $this->cancelAndTagSubscriptionOnResidualPurchase($currentOrder, $event->getContext());
             }
         } catch (\Exception $e) {
-            $this->logger->error('ABORTED OrderSubscriber:', [
+            $this->logger->error('ERROR: OrderSubscriber:', [
                 'error' => $e->getMessage(),
                 'line' => $e->getLine(),
+                'file' => $e->getFile(),
             ]);
         }
     }

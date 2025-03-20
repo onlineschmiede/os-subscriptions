@@ -35,7 +35,11 @@ class MollieSubscriptionHistorySubscriber implements EventSubscriberInterface
         try {
             $this->handleStockReductionForRenewals($event);
         } catch (\Exception $e) {
-            $this->logger->error($e->getMessage());
+            $this->logger->error('ERROR: MollieSubscriptionHistorySubscriber:', [
+                'error' => $e->getMessage(),
+                'line' => $e->getLine(),
+                'file' => $e->getFile(),
+            ]);
         }
     }
 
@@ -66,7 +70,6 @@ class MollieSubscriptionHistorySubscriber implements EventSubscriberInterface
             // skip initial and residual orders
             if (!isset($customFields['os_subscriptions']['order_type'])
             or (isset($customFields['os_subscriptions']['order_type']) && 'initial' == $customFields['os_subscriptions']['order_type'])
-            or (isset($customFields['os_subscriptions']['order_type']) && 'residual' == $customFields['os_subscriptions']['order_type'])
             ) {
                 continue;
             }

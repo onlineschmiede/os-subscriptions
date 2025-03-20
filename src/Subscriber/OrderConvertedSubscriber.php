@@ -24,26 +24,14 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  */
 class OrderConvertedSubscriber implements EventSubscriberInterface
 {
-    /**
-     * @param AbstractStockStorage $stockStorage
-     * @param EntityRepository $orderRepository
-     * @param EntityRepository $productRepository
-     * @param EntityRepository $subscriptionHistoryRepository
-     * @param LoggerInterface $logger
-     */
     public function __construct(
         private readonly AbstractStockStorage $stockStorage,
-        private readonly EntityRepository     $orderRepository,
-        private readonly EntityRepository     $productRepository,
-        private readonly EntityRepository     $subscriptionHistoryRepository,
-        private readonly LoggerInterface      $logger
-    )
-    {
-    }
+        private readonly EntityRepository $orderRepository,
+        private readonly EntityRepository $productRepository,
+        private readonly EntityRepository $subscriptionHistoryRepository,
+        private readonly LoggerInterface $logger
+    ) {}
 
-    /**
-     * @return array
-     */
     public static function getSubscribedEvents(): array
     {
         return [
@@ -51,20 +39,18 @@ class OrderConvertedSubscriber implements EventSubscriberInterface
         ];
     }
 
-
-    /**
-     * @param OrderConvertedEvent $event
-     * @return void
-     */
     public function onOrderConverted(OrderConvertedEvent $event): void
     {
         try {
             if ($this->shouldProcess($event)) {
                 $this->refillEmptyProductStockByOrderQuantity($event);
             }
-
         } catch (\Exception $e) {
-            $this->logger->error($e->getMessage());
+            $this->logger->error('ERROR: OrderConvertedSubscriber:', [
+                'error' => $e->getMessage(),
+                'line' => $e->getLine(),
+                'file' => $e->getFile(),
+            ]);
         }
     }
 
@@ -72,21 +58,19 @@ class OrderConvertedSubscriber implements EventSubscriberInterface
      * The OrderConvertedEvent is actually called several times but we have to ensure
      * that the condition is only applied once within the given context.
      * Which in fact is the renewal of the subscriptions.
-     * @param OrderConvertedEvent $event
-     * @return bool
      */
     private function shouldProcess(OrderConvertedEvent $event): bool
     {
         $order = $this->getOrderEntity($event);
-        $mollieSubscriptionId = $order->getCustomFields()["mollie_payments"]["swSubscriptionId"] ?? false;
+        $mollieSubscriptionId = $order->getCustomFields()['mollie_payments']['swSubscriptionId'] ?? false;
 
-        # only process mollie subscriptions
+        // only process mollie subscriptions
         if (!$mollieSubscriptionId) {
             return false;
         }
 
-        # prevent repeated execution
-        $initialOrderWasCloned = $order->getCustomFields()["mollie_payments"]["order_id"] ?? false;
+        // prevent repeated execution
+        $initialOrderWasCloned = $order->getCustomFields()['mollie_payments']['order_id'] ?? false;
         if ($initialOrderWasCloned) {
             return !$this->subscriptionAlreadyProcessed($mollieSubscriptionId, $event);
         }
@@ -95,9 +79,7 @@ class OrderConvertedSubscriber implements EventSubscriberInterface
     }
 
     /**
-     * Increases the stock by the product quantity so mollie can process safely
-     * @param OrderConvertedEvent $event
-     * @return void
+     * Increases the stock by the product quantity so mollie can process safely.
      */
     private function refillEmptyProductStockByOrderQuantity(OrderConvertedEvent $event)
     {
@@ -105,7 +87,7 @@ class OrderConvertedSubscriber implements EventSubscriberInterface
         $context = $event->getContext();
 
         foreach ($order->getLineItems() as $lineItem) {
-            if ($lineItem->getType() !== LineItem::PRODUCT_LINE_ITEM_TYPE) {
+            if (LineItem::PRODUCT_LINE_ITEM_TYPE !== $lineItem->getType()) {
                 return;
             }
 
@@ -113,49 +95,45 @@ class OrderConvertedSubscriber implements EventSubscriberInterface
             $realProductStock = $referenceProduct->getStock();
 
             $quantity = $lineItem->getQuantity();
-            $productStock = $lineItem->getPayload()["stock"];
+            $productStock = $lineItem->getPayload()['stock'];
 
             if ($realProductStock < $quantity) {
-                # persist the stock storage, so no changes will take effect
+                // persist the stock storage, so no changes will take effect
                 $this->stockStorage->alter(
                     [new StockAlteration($lineItem->getId(), $lineItem->getProductId(), $productStock + $quantity, $productStock)],
                     $context
                 );
 
-                # mark the order that the stock was increased for MollieSubscriptionHistorySubscriber
+                // mark the order that the stock was increased for MollieSubscriptionHistorySubscriber
                 $customFields = $order->getCustomFields();
-                $customFields["os_subscriptions"]["stock_increased"] = true;
+                $customFields['os_subscriptions']['stock_increased'] = true;
                 $this->orderRepository->update([
                     [
                         'id' => $order->getId(),
                         'customFields' => $customFields,
-                    ]
+                    ],
                 ], $event->getContext());
             }
         }
     }
 
     /**
-     * Retrieve the order manually to have all customFields present
-     * @param OrderConvertedEvent $event
-     * @return OrderEntity
+     * Retrieve the order manually to have all customFields present.
      */
     private function getOrderEntity(OrderConvertedEvent $event): OrderEntity
     {
-        $mollieSubscriptionId = $event->getOrder()->getCustomFields()["mollie_payments"]["swSubscriptionId"];
+        $mollieSubscriptionId = $event->getOrder()->getCustomFields()['mollie_payments']['swSubscriptionId'];
 
         $criteria = new Criteria();
         $criteria->addAssociation('customFields');
         $criteria->addFilter(new EqualsFilter('customFields.mollie_payments.swSubscriptionId', $mollieSubscriptionId));
+
         return $this->orderRepository->search($criteria, $event->getContext())->first();
     }
 
     /**
      * Helper for several edge cases
-     * ! includes time based logic -> 60 seconds
-     * @param string $mollieSubscriptionId
-     * @param OrderConvertedEvent $event
-     * @return bool
+     * ! includes time based logic -> 60 seconds.
      */
     private function subscriptionAlreadyProcessed(string $mollieSubscriptionId, OrderConvertedEvent $event): bool
     {
@@ -175,11 +153,10 @@ class OrderConvertedSubscriber implements EventSubscriberInterface
         $created = $latestHistory->getCreatedAt();
         $diffInSeconds = $now->getTimestamp() - $created->getTimestamp();
 
-        # note: might needs adjustement based on how mollie handles webhook retries
+        // note: might needs adjustement based on how mollie handles webhook retries
         $thresholdSeconds = 30;
 
-        # hope and pray
+        // hope and pray
         return $diffInSeconds < $thresholdSeconds;
     }
-
 }
