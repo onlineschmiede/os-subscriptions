@@ -61,7 +61,7 @@ class OrderConvertedSubscriber implements EventSubscriberInterface
      */
     private function shouldProcess(OrderConvertedEvent $event): bool
     {
-        $order = $this->getOrderEntity($event);
+        $order = $event->getOrder();
         $mollieSubscriptionId = $order->getCustomFields()['mollie_payments']['swSubscriptionId'] ?? false;
 
         // only process mollie subscriptions
@@ -69,6 +69,7 @@ class OrderConvertedSubscriber implements EventSubscriberInterface
             return false;
         }
 
+        $order = $this->getOrderEntity($event, $mollieSubscriptionId);
         // prevent repeated execution
         $initialOrderWasCloned = $order->getCustomFields()['mollie_payments']['order_id'] ?? false;
         if ($initialOrderWasCloned) {
@@ -119,10 +120,12 @@ class OrderConvertedSubscriber implements EventSubscriberInterface
 
     /**
      * Retrieve the order manually to have all customFields present.
+     *
+     * @param mixed $mollieSubscriptionId
      */
-    private function getOrderEntity(OrderConvertedEvent $event): OrderEntity
+    private function getOrderEntity(OrderConvertedEvent $event, $mollieSubscriptionId): OrderEntity
     {
-        $mollieSubscriptionId = $event->getOrder()->getCustomFields()['mollie_payments']['swSubscriptionId'];
+        // $mollieSubscriptionId = $event->getOrder()->getCustomFields()['mollie_payments']['swSubscriptionId'];
 
         $criteria = new Criteria();
         $criteria->addAssociation('customFields');
