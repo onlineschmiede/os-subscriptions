@@ -49,13 +49,13 @@ class RentProductLoadedSubscriber implements EventSubscriberInterface
             $combinedAvailableStock = 0;
 
             // Check if the product stock is available
-            // $availableStock = $product->getAvailableStock();
+            $availableStock = $product->getAvailableStock();
 
             // if ($availableStock > 0) {
             //     return;
             // }
 
-            // $combinedAvailableStock += $availableStock;
+            $combinedAvailableStock += $availableStock;
 
             // Check if the product has a borrow product variant
             if (!isset($customFields['mollie_payments_product_parent_buy_variant'])) {

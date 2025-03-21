@@ -65,7 +65,12 @@ class OrderSubscriber implements EventSubscriberInterface
     private function cancelAndTagSubscriptionOnResidualPurchase(OrderEntity $order, Context $context)
     {
         $residualOrderLineItems = $this->getResidualOrderLineItems($order);
+
         if (count($residualOrderLineItems) < 1) {
+            $this->logger->info('RESIDUAL item not found in order. Skipping', [
+                'order' => $order->getId(),
+            ]);
+
             return;
         }
 
@@ -78,24 +83,67 @@ class OrderSubscriber implements EventSubscriberInterface
             return $payload['mollieSubscriptionId'] ?? $carry;
         });
 
+        if (!$subscriptionId) {
+            $this->logger->error('ERROR: OrderSubscriber: No subscriptionId found on residual purchase order', [
+                'order' => $order->getId(),
+            ]);
+        }
+
+        $this->logger->info('RESIDUAL CANCELLATION STARTED in OrderSubscriber', [
+            'subscriptionId' => $subscriptionId,
+        ]);
+
         $subscriptionEntity = $this->subscriptionManager->findSubscription($subscriptionId, $context);
-        if ($this->subscriptionManager->isCancelable($subscriptionEntity, $context)) {
-            // cancel the subscription through mollie API
-            $this->subscriptionManager->cancelSubscription($subscriptionId, $context);
 
-            // mark the subscription as initiated for cancellation for POS
-            $subscriptionEntity = $this->subscriptionRepository->search(new Criteria([$subscriptionId]), $context)->first();
-            $subscriptionMetaData = $subscriptionEntity->getMetadata()->toArray() ?? [];
+        if (!$subscriptionEntity) {
+            $this->logger->error('ERROR: OrderSubscriber: Subscription not found', [
+                'orderId' => $order->getId(),
+                'subscriptionId' => $subscriptionId,
+            ]);
 
-            $subscriptionMetaData['residually_purchased_at'] ??= (new \DateTime())->format('Y-m-d H:i:s T');
-            $subscriptionMetaData['status'] ??= 'residual_purchase';
+            return;
+        }
 
-            $this->subscriptionRepository->update([
-                [
-                    'id' => $subscriptionEntity->getId(),
-                    'metaData' => $subscriptionMetaData,
-                ],
-            ], $context);
+        $this->logger->info('RESIDUAL CANCELLATION STARTED WITH DATA: OrderSubscriber: subscriptionId', [
+            'subscriptionEntity' => $subscriptionEntity,
+            'subscriptionId' => $subscriptionId,
+        ]);
+
+        try {
+            if ($this->subscriptionManager->isCancelable($subscriptionEntity, $context)) {
+                // cancel the subscription through mollie API
+                $this->subscriptionManager->cancelSubscription($subscriptionId, $context);
+
+                // mark the subscription as initiated for cancellation for POS
+                $subscriptionEntity = $this->subscriptionRepository->search(new Criteria([$subscriptionId]), $context)->first();
+                $subscriptionMetaData = $subscriptionEntity->getMetadata()->toArray() ?? [];
+
+                $subscriptionMetaData['residually_purchased_at'] ??= (new \DateTime())->format('Y-m-d H:i:s T');
+                $subscriptionMetaData['status'] ??= 'residual_purchase';
+
+                $this->subscriptionRepository->update([
+                    [
+                        'id' => $subscriptionEntity->getId(),
+                        'metaData' => $subscriptionMetaData,
+                    ],
+                ], $context);
+
+                $this->logger->info('Subscription canceled and tagged as residual purchase', [
+                    'orderId' => $order->getId(),
+                    'subscriptionId' => $subscriptionId,
+                ]);
+            } else {
+                $this->logger->error('ERROR: OrderSubscriber: Subscription is not cancelable', [
+                    'orderId' => $order->getId(),
+                    'subscriptionId' => $subscriptionId,
+                ]);
+            }
+        } catch (\Exception $e) {
+            $this->logger->error('ERROR: OrderSubscriber: Failed to cancel subscription', [
+                'orderId' => $order->getId(),
+                'subscriptionId' => $subscriptionId,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 
