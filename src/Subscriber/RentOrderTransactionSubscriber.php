@@ -377,7 +377,7 @@ class RentOrderTransactionSubscriber implements EventSubscriberInterface
             }
 
             $this->logger->info('ABORTED Borrowing stock 8: Order is not of subscription initial type', [
-                'orderId' => $order,
+                'orderId' => $orderId,
                 // 'orderCustomFields' => $orderCustomFields,
             ]);
 
