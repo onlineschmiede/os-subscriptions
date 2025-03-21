@@ -303,12 +303,6 @@ class RentOrderTransactionSubscriber implements EventSubscriberInterface
                             }
 
                             // now swap the product stock like this; substract sthe stock from productBorrowVariant by the line item quantity and add it to the product
-
-                            // $productBorrowVariant->setAvailableStock($productBorrowVariant->getAvailableStock() - $lineItem->getQuantity());
-                            // $productBorrowVariant->setStock($productBorrowVariant->getStock() - $lineItem->getQuantity());
-                            // $product->setAvailableStock($product->getAvailableStock() + $lineItem->getQuantity());
-                            // $product->setStock($product->getStock() + $lineItem->getQuantity());
-
                             $this->logger->info('PROCESSING Borrowing stock: Reducing stock from borrow product variant', [
                                 'lineItemId' => $lineItem->getId(),
                                 'productId' => $lineItem->getProductId(),
