@@ -303,7 +303,9 @@ class RentOrderTransactionSubscriber implements EventSubscriberInterface
                             }
 
                             // now swap the product stock like this; substract sthe stock from productBorrowVariant by the line item quantity and add it to the product
+                            // now swap the product stock like this; substract sthe stock from productBorrowVariant by the line item quantity and add it to the product
                             $this->logger->info('PROCESSING Borrowing stock: Reducing stock from borrow product variant', [
+                                'orderId' => $orderId,
                                 'lineItemId' => $lineItem->getId(),
                                 'productId' => $lineItem->getProductId(),
                                 'purchased' => $lineItem->getQuantity(),
@@ -314,6 +316,7 @@ class RentOrderTransactionSubscriber implements EventSubscriberInterface
                             ]);
 
                             $this->logger->info('PROCCESING Borrowing stock: Adding stock to subscription variant', [
+                                'orderId' => $orderId,
                                 'lineItemId' => $lineItem->getId(),
                                 'productId' => $lineItem->getProductId(),
                                 'quantity' => $lineItem->getQuantity(),
@@ -345,12 +348,43 @@ class RentOrderTransactionSubscriber implements EventSubscriberInterface
                                 $productRepositoryContext
                             );
 
-                            $this->logger->info('PROCESSED Borrowing stock: Borrowed stock from borrow product variant');
-                            $this->logger->info('PROCESSED Borrowing stock: Added stock to subscription product variant');
+                            $this->logger->info(
+                                'PROCESSED Borrowing stock: Reduced stock from borrow product variant',
+                                [
+                                    'orderId' => $orderId,
+                                    'productBorrowedFrom' => $productBorrowVariant->getId(),
+                                    'numberOfItemsToBorrow' => $numberOfItemsToBorrow,
+                                    'oldAvailableStock' => $productBorrowVariant->getAvailableStock(),
+                                    'oldStock' => $productBorrowVariant->getStock(),
+                                    'newAvailableStock' => $productBorrowVariant->getAvailableStock() - $numberOfItemsToBorrow,
+                                    'newStock' => $productBorrowVariant->getStock() - $numberOfItemsToBorrow,
+                                ]
+                            );
+
+                            $this->logger->info(
+                                'PROCESSED Borrowing stock: Added stock to subscription product variant',
+                                [
+                                    'orderId' => $orderId,
+                                    'productBorrowedTo' => $product->getId(),
+                                    'numberOfItemsToBorrow' => $numberOfItemsToBorrow,
+                                    'oldAvailableStock' => $product->getAvailableStock(),
+                                    'oldStock' => $product->getStock(),
+                                    'newAvailableStock' => $product->getAvailableStock() - $numberOfItemsToBorrow,
+                                    'newStock' => $product->getStock() - $numberOfItemsToBorrow,
+                                ]
+                            );
 
                             $orderCustomFields['os_subscriptions']['stock_borrowed'] = true;
                             $orderCustomFields['os_subscriptions']['stock_borrowed_from'] = $productBorrowVariant->getId();
+                            $orderCustomFields['os_subscriptions']['stock_borrowed_from_old_available_stock'] = $productBorrowVariant->getAvailableStock();
+                            $orderCustomFields['os_subscriptions']['stock_borrowed_from_old_stock'] = $productBorrowVariant->getStock();
+                            $orderCustomFields['os_subscriptions']['stock_borrowed_from_new_available_stock'] = $productBorrowVariant->getAvailableStock() - $numberOfItemsToBorrow;
+                            $orderCustomFields['os_subscriptions']['stock_borrowed_from_new_stock'] = $productBorrowVariant->getStock() - $numberOfItemsToBorrow;
                             $orderCustomFields['os_subscriptions']['stock_borrowed_to'] = $product->getId();
+                            $orderCustomFields['os_subscriptions']['stock_borrowed_to_old_available_stock'] = $product->getAvailableStock();
+                            $orderCustomFields['os_subscriptions']['stock_borrowed_to_old_stock'] = $product->getStock();
+                            $orderCustomFields['os_subscriptions']['stock_borrowed_to_new_available_stock'] = $product->getAvailableStock() + $numberOfItemsToBorrow;
+                            $orderCustomFields['os_subscriptions']['stock_borrowed_to_new_stock'] = $product->getStock() + $numberOfItemsToBorrow;
                             $orderCustomFields['os_subscriptions']['stock_borrowed_amount'] = $numberOfItemsToBorrow;
 
                             $this->orderRepository->update([
