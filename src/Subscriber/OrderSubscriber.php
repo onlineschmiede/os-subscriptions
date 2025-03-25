@@ -196,8 +196,13 @@ class OrderSubscriber implements EventSubscriberInterface
         }
 
         if ($shouldUpdate) {
-            // add shopware tag to the order
+            // prepare data for * @ORM\PrePersist
+            $updateData = [
+                'id' => $order->getId(),
+                'customFields' => $customFields,
+            ];
 
+            // add shopware tag to the order
             // Get the tag ID from the system config
             $tagId = $this->systemConfigService->get('OsSubscriptions.config.subscriptionRenewalBuyoutTag');
 
@@ -214,17 +219,14 @@ class OrderSubscriber implements EventSubscriberInterface
 
                 // Add the tag to the order's tags collection
                 $order->setTags($tagCollection);
+
+                // append the tag to the order update data
+                $updateData['tags'] = [
+                    ['id' => $tag->getId()],
+                ];
             }
 
-            $this->orderRepository->update([
-                [
-                    'id' => $order->getId(),
-                    'customFields' => $customFields,
-                    'tags' => [
-                        ['id' => $tag->getId() ?? null],
-                    ],
-                ],
-            ], $context);
+            $this->orderRepository->update([$updateData], $context);
         }
     }
 
