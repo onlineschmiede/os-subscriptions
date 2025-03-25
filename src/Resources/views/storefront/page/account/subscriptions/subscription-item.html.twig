@@ -28,10 +28,29 @@
     {# disabled #}
 {% endblock %}
 
+{% block page_account_subscriptions_item_context_menu_col %}
+    {% if subscription.status == "canceled" %}
+        {# disabled #}
+    {% else %}
+        {{ parent() }}
+    {% endif %}
+{% endblock %}
+
+{% block page_account_mollie_subscriptions_item_cancel_until %}
+    {# disabled #}
+{% endblock %}
+
+{% block page_account_mollie_subscriptions_item_next_payment %}
+    {% if subscription.status == "canceled" %}
+        {# disabled #}
+    {% else %}
+        {{ parent() }}
+    {% endif %}
+{% endblock %}
+
 {% block page_account_mollie_subscriptions_item_overview %}
     {{ parent() }}
 
-    {% set metadata = subscription.get('metadata') %}
     <div class="order-wrapper">
         <div class="order-item-header">
             <div class="row flex-wrap">
@@ -42,7 +61,7 @@
                     <p><strong>Rücksendung erhalten:</strong> {{ attribute(metadata, 'cancellation_reviewed_at')|date('d.m.Y H:i', 'Europe/Vienna') }}</p>
                 {% endif %}
                 <div class='row flex-wrap' style="padding-top: 12px;padding-left:-12px;">
-                    {% if metadata['cancellation_initialized_at'] is not defined or metadata['cancellation_initialized_at'] is empty %}
+                    {% if (metadata['cancellation_initialized_at'] is not defined or metadata['cancellation_initialized_at'] is empty) and subscription.status != 'canceled' %}
                         <button type="button" class="btn btn-primary col-6" data-bs-toggle="modal" data-bs-target="#exampleModal">
                             Rücksendung anfordern
                         </button>
@@ -55,14 +74,16 @@
                                         </div>
                                         <div class="modal-body">
                                             <p>
-                                                Vor der Rücksendung ist darauf zu achten, dass alle Artikel gereinigt, geputzt und vollständig zurückgesendet werden. Die Kosten für die Rücksendung sind selbst zu tragen. Alternativ kann das Mietprodukt auch direkt in unserem Shop abgegeben werden.
+                                                Vor der Rücksendung ist darauf zu achten, dass alle Artikel gereinigt, geputzt und vollständig zurückgesendet werden. Die Kosten für die Rücksendung sind selbst zu tragen. <br>
+                                                <br>
+                                                Alternativ kann das Mietprodukt auch direkt in unserem Shop abgegeben werden.
                                                 <br>
                                                 <br>
                                                 Bitte sende dein gemietetes Produkt an folgende Adresse zurück:
                                                 <br>
                                                 <br>
-                                                Babyrella
-                                                Waagner-Biro-Straße 20
+                                                Babyrella <br>
+                                                Waagner-Biro-Straße 20 <br>
                                                 A-8020 Graz
                                                 <br>
                                                 <br>

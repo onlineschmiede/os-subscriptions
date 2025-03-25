@@ -209,8 +209,8 @@ class AccountController extends AbstractStoreFrontController
     {
         $discountLineItem = new LineItem(Uuid::randomHex(), SubscriptionLineItem::DISCOUNT_RESIDUAL_TYPE);
 
-        $discountLineItem->setLabel('Restkauf Rabatt auf Abonnement');
-        $discountLineItem->setDescription('Restkauf Rabatt auf Abonnement');
+        $discountLineItem->setLabel('Restkauf Rabatt auf Mietprodukt');
+        $discountLineItem->setDescription('Restkauf Rabatt auf Mietprodukt');
         $discountLineItem->setGood(false);
         $discountLineItem->setStackable(false);
         $discountLineItem->setRemovable(true);

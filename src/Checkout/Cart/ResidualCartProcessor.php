@@ -33,15 +33,24 @@ class ResidualCartProcessor implements CartDataCollectorInterface, CartProcessor
      */
     public function process(CartDataCollection $data, Cart $original, Cart $toCalculate, SalesChannelContext $context, CartBehavior $behavior): void
     {
+        $hasResidualProducts = false;
+
         foreach ($original->getLineItems() as $lineItem) {
             if ($lineItem->getType() === SubscriptionLineItem::PRODUCT_RESIDUAL_TYPE ||
                 $lineItem->getType() === SubscriptionLineItem::DISCOUNT_RESIDUAL_TYPE) {
+                $hasResidualProducts = true;
+
                 $toCalculate->add($lineItem);
                 $toCalculate->markModified();
             }
         }
 
         $this->removeInvalidResidualDiscounts($toCalculate);
+
+        # disable loyalty points
+        if ($hasResidualProducts) {
+            $context->getCustomer()->removeExtension('loyaltyPoints');
+        }
     }
 
     /**
