@@ -36,6 +36,7 @@
             <argument type="service" id="mollie_subscription.repository"/>
             <argument type="service" id="os.subscriptions.logger" />
             <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
+            <argument type="service" id="tag.repository"/>
             <tag name="kernel.event_subscriber"/>
         </service>
 
