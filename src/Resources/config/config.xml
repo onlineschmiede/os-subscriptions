@@ -207,4 +207,15 @@
             <defaultValue>80</defaultValue>
         </input-field>
     </card>
+
+    <card>
+        <title>Subscription Renewal and Buyout Order Tag</title>
+        <title lang="de-DE">Tag für Abonnementverlängerung und Restkauf-Bestellung</title>
+         <component name="sw-entity-single-select">
+            <name>subscriptionRenewalBuyoutTag</name>
+            <entity>tag</entity>
+            <label>Choose a tag that will be applied for all subscription renewal/buyout orders.</label>
+            <label lang="de-DE">Wählen Sie ein Tag, das für alle Abonnementverlängerungen/Restkauf Bestellungen angewendet wird.</label>
+        </component>
+    </card>
 </config>

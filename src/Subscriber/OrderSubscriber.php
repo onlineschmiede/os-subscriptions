@@ -13,6 +13,8 @@ use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWrittenEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\EqualsFilter;
+use Shopware\Core\System\SystemConfig\SystemConfigService;
+use Shopware\Core\System\Tag\TagCollection;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 class OrderSubscriber implements EventSubscriberInterface
@@ -22,6 +24,8 @@ class OrderSubscriber implements EventSubscriberInterface
         private readonly SubscriptionManager $subscriptionManager,
         private readonly EntityRepository $subscriptionRepository,
         private readonly LoggerInterface $logger,
+        private readonly SystemConfigService $systemConfigService,
+        private EntityRepository $tagRepository
     ) {}
 
     public static function getSubscribedEvents(): array
@@ -174,6 +178,7 @@ class OrderSubscriber implements EventSubscriberInterface
                 null
             );
             $customFields['os_subscriptions']['subscription_id'] = $subscriptionId;
+            $shouldUpdate = true;
         } elseif (count($this->getRentOrderLineItems($order)) > 0) {
             $shouldUpdate = !isset($customFields['os_subscriptions']['order_type']);
 
@@ -187,13 +192,37 @@ class OrderSubscriber implements EventSubscriberInterface
 
             $customFields['os_subscriptions']['order_type'] = $isRenewal ? 'renewal' : 'initial';
             $customFields['os_subscriptions']['subscription_id'] = $subscriptionId;
+            $shouldUpdate = true;
         }
 
         if ($shouldUpdate) {
+            // add shopware tag to the order
+
+            // Get the tag ID from the system config
+            $tagId = $this->systemConfigService->get('OsSubscriptions.config.subscriptionRenewalBuyoutTag');
+
+            // Search for the tag
+            $tagCriteria = new Criteria();
+            $tagCriteria->addFilter(new EqualsFilter('id', $tagId));
+
+            /** @var TagEntity $tag */
+            $tag = $this->tagRepository->search($tagCriteria, Context::createDefaultContext())->first();
+
+            if (null !== $tag) {
+                $tagCollection = new TagCollection();
+                $tagCollection->add($tag);
+
+                // Add the tag to the order's tags collection
+                $order->setTags($tagCollection);
+            }
+
             $this->orderRepository->update([
                 [
                     'id' => $order->getId(),
                     'customFields' => $customFields,
+                    'tags' => [
+                        ['id' => $tag->getId() ?? null],
+                    ],
                 ],
             ], $context);
         }
