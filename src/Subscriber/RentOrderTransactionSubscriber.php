@@ -342,7 +342,7 @@ class RentOrderTransactionSubscriber implements EventSubscriberInterface
                                     [
                                         'id' => $product->getId(),
                                         'availableStock' => $product->getAvailableStock() + $numberOfItemsToBorrow,
-                                        // 'stock' => $product->getStock() + $numberOfItemsToBorrow, // we dont need to update this type of stock of the product so it doesnt becaome available for purchase before the order was marked as completed
+                                        'stock' => $product->getStock() + $numberOfItemsToBorrow, // do we need to update this type of stock of the product so it doesnt becaome available for purchase before the order was marked as completed
                                     ],
                                 ],
                                 $productRepositoryContext

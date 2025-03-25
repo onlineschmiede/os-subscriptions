@@ -169,39 +169,46 @@ class OrderSubscriber implements EventSubscriberInterface
 
         if (count($this->getResidualOrderLineItems($order)) > 0) {
             $shouldUpdate = !isset($customFields['os_subscriptions']['order_type']);
-            $customFields['os_subscriptions']['order_type'] = 'residual';
-
-            // obtain the subscriptionId from any residualLineItems within the new order
-            // which are set within the AccountController. Otherwise we can't reference the subscription.
-            $subscriptionId = array_reduce(
-                $this->getResidualOrderLineItems($order),
-                fn ($carry, OrderLineItemEntity $item) => $carry ?: ($item->getPayload()['mollieSubscriptionId'] ?? null),
-                null
-            );
-            $customFields['os_subscriptions']['subscription_id'] = $subscriptionId;
-            $shouldUpdate = true;
-            $shouldAddShopwareTag = true;
+            if ($shouldUpdate) {
+                $customFields['os_subscriptions']['order_type'] = 'residual';
+                // obtain the subscriptionId from any residualLineItems within the new order
+                // which are set within the AccountController. Otherwise we can't reference the subscription.
+                $subscriptionId = array_reduce(
+                    $this->getResidualOrderLineItems($order),
+                    fn ($carry, OrderLineItemEntity $item) => $carry ?: ($item->getPayload()['mollieSubscriptionId'] ?? null),
+                    null
+                );
+                $customFields['os_subscriptions']['subscription_id'] = $subscriptionId;
+                $shouldAddShopwareTag = $shouldUpdate;
+            }
         } elseif (count($this->getRentOrderLineItems($order)) > 0) {
             $shouldUpdate = !isset($customFields['os_subscriptions']['order_type']);
 
-            // here we can access safely the subscriptionId as a renewals is always copied
-            // from the initial order.
-            $subscriptionId = $customFields['mollie_payments']['swSubscriptionId'];
+            if ($shouldUpdate) {
+                // here we can access safely the subscriptionId as a renewals is always copied
+                // from the initial order.
+                $subscriptionId = $customFields['mollie_payments']['swSubscriptionId'];
 
-            $criteria = (new Criteria())->addFilter(new EqualsFilter('customFields.mollie_payments.swSubscriptionId', $subscriptionId));
-            $existingOrderCount = count($this->orderRepository->search($criteria, $context));
-            $isRenewal = $existingOrderCount > 1;
+                $criteria = (new Criteria())->addFilter(new EqualsFilter('customFields.mollie_payments.swSubscriptionId', $subscriptionId));
+                $existingOrderCount = count($this->orderRepository->search($criteria, $context));
+                $isRenewal = $existingOrderCount > 1;
 
-            $customFields['os_subscriptions']['order_type'] = $isRenewal ? 'renewal' : 'initial';
-            $customFields['os_subscriptions']['subscription_id'] = $subscriptionId;
-            $shouldUpdate = true;
-            if ($isRenewal) {
-                $shouldAddShopwareTag = true;
+                $customFields['os_subscriptions']['order_type'] = $isRenewal ? 'renewal' : 'initial';
+                $customFields['os_subscriptions']['subscription_id'] = $subscriptionId;
+                if ($isRenewal) {
+                    $shouldAddShopwareTag = $shouldUpdate;
+                }
             }
         }
 
         if ($shouldUpdate) {
-            // prepare data for * @ORM\PrePersist
+            // prepare data for update
+
+            $this->logger->info('Order subscriber order should be tagged', [
+                'orderId' => $order->getId(),
+                'subscriptionId' => $subscriptionId,
+            ]);
+
             $updateData = [
                 'id' => $order->getId(),
                 'customFields' => $customFields,
@@ -239,12 +246,19 @@ class OrderSubscriber implements EventSubscriberInterface
                 }
             }
 
-            $this->logger->info('OrderSubscriber UPDATE', [
-                'order' => $order->getId(),
-                'updateData' => $updateData,
-            ]);
+            try {
+                $this->orderRepository->update([$updateData], $context);
 
-            $this->orderRepository->update([$updateData], $context);
+                $this->logger->info('TAG OrderSubscriber UPDATE SUCCES', [
+                    'order' => $order->getId(),
+                    'updateData' => $updateData,
+                ]);
+            } catch (\Exception $e) {
+                $this->logger->error('ERROR: OrderSubscriber: Failed to update order', [
+                    'order' => $order->getId(),
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
     }
 
