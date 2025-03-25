@@ -179,7 +179,7 @@ class OrderSubscriber implements EventSubscriberInterface
                     null
                 );
                 $customFields['os_subscriptions']['subscription_id'] = $subscriptionId;
-                $shouldAddShopwareTag = $shouldUpdate;
+                $shouldAddShopwareTag = true;
             }
         } elseif (count($this->getRentOrderLineItems($order)) > 0) {
             $shouldUpdate = !isset($customFields['os_subscriptions']['order_type']);
@@ -196,7 +196,7 @@ class OrderSubscriber implements EventSubscriberInterface
                 $customFields['os_subscriptions']['order_type'] = $isRenewal ? 'renewal' : 'initial';
                 $customFields['os_subscriptions']['subscription_id'] = $subscriptionId;
                 if ($isRenewal) {
-                    $shouldAddShopwareTag = $shouldUpdate;
+                    $shouldAddShopwareTag = true;
                 }
             }
         }
@@ -204,7 +204,7 @@ class OrderSubscriber implements EventSubscriberInterface
         if ($shouldUpdate) {
             // prepare data for update
 
-            $this->logger->info('Order subscriber order should be tagged', [
+            $this->logger->info('Order subscriber order should be updated', [
                 'orderId' => $order->getId(),
                 'subscriptionId' => $subscriptionId,
             ]);
@@ -216,11 +216,15 @@ class OrderSubscriber implements EventSubscriberInterface
 
             // add shopware tag to the order
             if ($shouldAddShopwareTag) {
+                $this->logger->info('Order subscriber order should be tagged', [
+                    'orderId' => $order->getId(),
+                    'subscriptionId' => $subscriptionId,
+                ]);
                 // Get the tag ID from the system config
                 $tagId = $this->systemConfigService->get('OsSubscriptions.config.subscriptionRenewalBuyoutTag');
 
                 if (!$tagId) {
-                    $this->logger->error('ERROR: OrderSubscriber: No tagId found in system config', [
+                    $this->logger->error('ERROR: OrderSubscriber: No tag selected in system config', [
                         'order' => $order->getId(),
                     ]);
                 } else {
@@ -239,20 +243,33 @@ class OrderSubscriber implements EventSubscriberInterface
                         $order->setTags($tagCollection);
 
                         // append the tag to the order update data
+                        $this->logger->info('Order subscriber TAG found and added to updateData', [
+                            'orderId' => $order->getId(),
+                            'tag' => $tag,
+                        ]);
+
                         $updateData['tags'] = [
                             ['id' => $tag->getId()],
                         ];
+                    } else {
+                        $this->logger->info('Order subscriber TAG not found', [
+                            'orderId' => $order->getId(),
+                        ]);
                     }
                 }
+            } else {
+                $this->logger->info('Order subscriber TAG should not be applied', [
+                    'orderId' => $order->getId(),
+                ]);
             }
 
             try {
-                $this->orderRepository->update([$updateData], $context);
-
-                $this->logger->info('TAG OrderSubscriber UPDATE SUCCES', [
+                $this->logger->info('TAG OrderSubscriber UPDATE starting', [
                     'order' => $order->getId(),
                     'updateData' => $updateData,
                 ]);
+
+                $this->orderRepository->update([$updateData], $context);
             } catch (\Exception $e) {
                 $this->logger->error('ERROR: OrderSubscriber: Failed to update order', [
                     'order' => $order->getId(),
