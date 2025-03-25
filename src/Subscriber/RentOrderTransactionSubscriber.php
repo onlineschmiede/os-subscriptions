@@ -376,15 +376,15 @@ class RentOrderTransactionSubscriber implements EventSubscriberInterface
 
                             $orderCustomFields['os_subscriptions']['stock_borrowed'] = true;
                             $orderCustomFields['os_subscriptions']['stock_borrowed_from'] = $productBorrowVariant->getId();
-                            $orderCustomFields['os_subscriptions']['stock_borrowed_from_product_number'] = $productBorrowVariant->getProductNumber() ?? '';
-                            $orderCustomFields['os_subscriptions']['stock_borrowed_from_product_title'] = $productBorrowVariant->getProductLabel() ?? '';
+                            // $orderCustomFields['os_subscriptions']['stock_borrowed_from_product_number'] = $productBorrowVariant->getProductNumber() ?? null;
+                            // $orderCustomFields['os_subscriptions']['stock_borrowed_from_product_title'] = $productBorrowVariant->getProductLabel() ?? null;
                             $orderCustomFields['os_subscriptions']['stock_borrowed_from_old_available_stock'] = $productBorrowVariant->getAvailableStock();
                             $orderCustomFields['os_subscriptions']['stock_borrowed_from_old_stock'] = $productBorrowVariant->getStock();
                             $orderCustomFields['os_subscriptions']['stock_borrowed_from_new_available_stock'] = $productBorrowVariant->getAvailableStock() - $numberOfItemsToBorrow;
                             $orderCustomFields['os_subscriptions']['stock_borrowed_from_new_stock'] = $productBorrowVariant->getStock() - $numberOfItemsToBorrow;
                             $orderCustomFields['os_subscriptions']['stock_borrowed_to'] = $product->getId();
-                            $orderCustomFields['os_subscriptions']['stock_borrowed_to_product_number'] = $product->getProductNumber() ?? '';
-                            $orderCustomFields['os_subscriptions']['stock_borrowed_to_product_title'] = $product->getProductLabel() ?? '';
+                            //  $orderCustomFields['os_subscriptions']['stock_borrowed_to_product_number'] = $product->getProductNumber() ?? null;
+                            // $orderCustomFields['os_subscriptions']['stock_borrowed_to_product_title'] = $product->getProductLabel() ?? null;
                             $orderCustomFields['os_subscriptions']['stock_borrowed_to_old_available_stock'] = $product->getAvailableStock();
                             $orderCustomFields['os_subscriptions']['stock_borrowed_to_old_stock'] = $product->getStock();
                             $orderCustomFields['os_subscriptions']['stock_borrowed_to_new_available_stock'] = $product->getAvailableStock() + $numberOfItemsToBorrow;
