@@ -25,7 +25,7 @@ class OrderSubscriber implements EventSubscriberInterface
         private readonly EntityRepository $subscriptionRepository,
         private readonly LoggerInterface $logger,
         private readonly SystemConfigService $systemConfigService,
-        private EntityRepository $tagRepository
+        private readonly EntityRepository $tagRepository
     ) {}
 
     public static function getSubscribedEvents(): array
@@ -165,6 +165,7 @@ class OrderSubscriber implements EventSubscriberInterface
         }
 
         $shouldUpdate = false;
+        $shouldAddShopwareTag = false;
 
         if (count($this->getResidualOrderLineItems($order)) > 0) {
             $shouldUpdate = !isset($customFields['os_subscriptions']['order_type']);
@@ -179,6 +180,7 @@ class OrderSubscriber implements EventSubscriberInterface
             );
             $customFields['os_subscriptions']['subscription_id'] = $subscriptionId;
             $shouldUpdate = true;
+            $shouldAddShopwareTag = true;
         } elseif (count($this->getRentOrderLineItems($order)) > 0) {
             $shouldUpdate = !isset($customFields['os_subscriptions']['order_type']);
 
@@ -193,6 +195,9 @@ class OrderSubscriber implements EventSubscriberInterface
             $customFields['os_subscriptions']['order_type'] = $isRenewal ? 'renewal' : 'initial';
             $customFields['os_subscriptions']['subscription_id'] = $subscriptionId;
             $shouldUpdate = true;
+            if ($isRenewal) {
+                $shouldAddShopwareTag = true;
+            }
         }
 
         if ($shouldUpdate) {
@@ -203,28 +208,41 @@ class OrderSubscriber implements EventSubscriberInterface
             ];
 
             // add shopware tag to the order
-            // Get the tag ID from the system config
-            $tagId = $this->systemConfigService->get('OsSubscriptions.config.subscriptionRenewalBuyoutTag');
+            if ($shouldAddShopwareTag) {
+                // Get the tag ID from the system config
+                $tagId = $this->systemConfigService->get('OsSubscriptions.config.subscriptionRenewalBuyoutTag');
 
-            // Search for the tag
-            $tagCriteria = new Criteria();
-            $tagCriteria->addFilter(new EqualsFilter('id', $tagId));
+                if (!$tagId) {
+                    $this->logger->error('ERROR: OrderSubscriber: No tagId found in system config', [
+                        'order' => $order->getId(),
+                    ]);
+                } else {
+                    // Search for the tag
+                    $tagCriteria = new Criteria();
+                    $tagCriteria->addFilter(new EqualsFilter('id', $tagId));
 
-            /** @var TagEntity $tag */
-            $tag = $this->tagRepository->search($tagCriteria, Context::createDefaultContext())->first();
+                    /** @var TagEntity $tag */
+                    $tag = $this->tagRepository->search($tagCriteria, Context::createDefaultContext())->first();
 
-            if (null !== $tag) {
-                $tagCollection = new TagCollection();
-                $tagCollection->add($tag);
+                    if ($tag) {
+                        $tagCollection = new TagCollection();
+                        $tagCollection->add($tag);
 
-                // Add the tag to the order's tags collection
-                $order->setTags($tagCollection);
+                        // Add the tag to the order's tags collection
+                        $order->setTags($tagCollection);
 
-                // append the tag to the order update data
-                $updateData['tags'] = [
-                    ['id' => $tag->getId()],
-                ];
+                        // append the tag to the order update data
+                        $updateData['tags'] = [
+                            ['id' => $tag->getId()],
+                        ];
+                    }
+                }
             }
+
+            $this->logger->info('OrderSubscriber UPDATE', [
+                'order' => $order->getId(),
+                'updateData' => $updateData,
+            ]);
 
             $this->orderRepository->update([$updateData], $context);
         }
