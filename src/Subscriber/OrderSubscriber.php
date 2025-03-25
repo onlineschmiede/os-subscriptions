@@ -25,7 +25,7 @@ class OrderSubscriber implements EventSubscriberInterface
         private readonly EntityRepository $subscriptionRepository,
         private readonly LoggerInterface $logger,
         private readonly SystemConfigService $systemConfigService,
-        private EntityRepository $tagRepository
+        private readonly EntityRepository $tagRepository
     ) {}
 
     public static function getSubscribedEvents(): array
@@ -165,68 +165,117 @@ class OrderSubscriber implements EventSubscriberInterface
         }
 
         $shouldUpdate = false;
+        $shouldAddShopwareTag = false;
 
         if (count($this->getResidualOrderLineItems($order)) > 0) {
             $shouldUpdate = !isset($customFields['os_subscriptions']['order_type']);
-            $customFields['os_subscriptions']['order_type'] = 'residual';
-
-            // obtain the subscriptionId from any residualLineItems within the new order
-            // which are set within the AccountController. Otherwise we can't reference the subscription.
-            $subscriptionId = array_reduce(
-                $this->getResidualOrderLineItems($order),
-                fn ($carry, OrderLineItemEntity $item) => $carry ?: ($item->getPayload()['mollieSubscriptionId'] ?? null),
-                null
-            );
-            $customFields['os_subscriptions']['subscription_id'] = $subscriptionId;
-            $shouldUpdate = true;
+            if ($shouldUpdate) {
+                $customFields['os_subscriptions']['order_type'] = 'residual';
+                // obtain the subscriptionId from any residualLineItems within the new order
+                // which are set within the AccountController. Otherwise we can't reference the subscription.
+                $subscriptionId = array_reduce(
+                    $this->getResidualOrderLineItems($order),
+                    fn ($carry, OrderLineItemEntity $item) => $carry ?: ($item->getPayload()['mollieSubscriptionId'] ?? null),
+                    null
+                );
+                $customFields['os_subscriptions']['subscription_id'] = $subscriptionId;
+                $shouldAddShopwareTag = true;
+            }
         } elseif (count($this->getRentOrderLineItems($order)) > 0) {
             $shouldUpdate = !isset($customFields['os_subscriptions']['order_type']);
 
-            // here we can access safely the subscriptionId as a renewals is always copied
-            // from the initial order.
-            $subscriptionId = $customFields['mollie_payments']['swSubscriptionId'];
+            if ($shouldUpdate) {
+                // here we can access safely the subscriptionId as a renewals is always copied
+                // from the initial order.
+                $subscriptionId = $customFields['mollie_payments']['swSubscriptionId'];
 
-            $criteria = (new Criteria())->addFilter(new EqualsFilter('customFields.mollie_payments.swSubscriptionId', $subscriptionId));
-            $existingOrderCount = count($this->orderRepository->search($criteria, $context));
-            $isRenewal = $existingOrderCount > 1;
+                $criteria = (new Criteria())->addFilter(new EqualsFilter('customFields.mollie_payments.swSubscriptionId', $subscriptionId));
+                $existingOrderCount = count($this->orderRepository->search($criteria, $context));
+                $isRenewal = $existingOrderCount > 1;
 
-            $customFields['os_subscriptions']['order_type'] = $isRenewal ? 'renewal' : 'initial';
-            $customFields['os_subscriptions']['subscription_id'] = $subscriptionId;
-            $shouldUpdate = true;
+                $customFields['os_subscriptions']['order_type'] = $isRenewal ? 'renewal' : 'initial';
+                $customFields['os_subscriptions']['subscription_id'] = $subscriptionId;
+                if ($isRenewal) {
+                    $shouldAddShopwareTag = true;
+                }
+            }
         }
 
         if ($shouldUpdate) {
-            // prepare data for * @ORM\PrePersist
+            // prepare data for update
+
+            $this->logger->info('Order subscriber order should be updated', [
+                'orderId' => $order->getId(),
+                'subscriptionId' => $subscriptionId,
+            ]);
+
             $updateData = [
                 'id' => $order->getId(),
                 'customFields' => $customFields,
             ];
 
             // add shopware tag to the order
-            // Get the tag ID from the system config
-            $tagId = $this->systemConfigService->get('OsSubscriptions.config.subscriptionRenewalBuyoutTag');
+            if ($shouldAddShopwareTag) {
+                $this->logger->info('Order subscriber order should be tagged', [
+                    'orderId' => $order->getId(),
+                    'subscriptionId' => $subscriptionId,
+                ]);
+                // Get the tag ID from the system config
+                $tagId = $this->systemConfigService->get('OsSubscriptions.config.subscriptionRenewalBuyoutTag');
 
-            // Search for the tag
-            $tagCriteria = new Criteria();
-            $tagCriteria->addFilter(new EqualsFilter('id', $tagId));
+                if (!$tagId) {
+                    $this->logger->error('ERROR: OrderSubscriber: No tag selected in system config', [
+                        'order' => $order->getId(),
+                    ]);
+                } else {
+                    // Search for the tag
+                    $tagCriteria = new Criteria();
+                    $tagCriteria->addFilter(new EqualsFilter('id', $tagId));
 
-            /** @var TagEntity $tag */
-            $tag = $this->tagRepository->search($tagCriteria, Context::createDefaultContext())->first();
+                    /** @var TagEntity $tag */
+                    $tag = $this->tagRepository->search($tagCriteria, Context::createDefaultContext())->first();
 
-            if (null !== $tag) {
-                $tagCollection = new TagCollection();
-                $tagCollection->add($tag);
+                    if ($tag) {
+                        $tagCollection = new TagCollection();
+                        $tagCollection->add($tag);
 
-                // Add the tag to the order's tags collection
-                $order->setTags($tagCollection);
+                        // Add the tag to the order's tags collection
+                        $order->setTags($tagCollection);
 
-                // append the tag to the order update data
-                $updateData['tags'] = [
-                    ['id' => $tag->getId()],
-                ];
+                        // append the tag to the order update data
+                        $this->logger->info('Order subscriber TAG found and added to updateData', [
+                            'orderId' => $order->getId(),
+                            'tag' => $tag,
+                        ]);
+
+                        $updateData['tags'] = [
+                            ['id' => $tag->getId()],
+                        ];
+                    } else {
+                        $this->logger->info('Order subscriber TAG not found', [
+                            'orderId' => $order->getId(),
+                        ]);
+                    }
+                }
+            } else {
+                $this->logger->info('Order subscriber TAG should not be applied', [
+                    'orderId' => $order->getId(),
+                ]);
             }
 
-            $this->orderRepository->update([$updateData], $context);
+            try {
+                $this->logger->info('TAG OrderSubscriber UPDATE starting', [
+                    'order' => $order->getId(),
+                    'updateData' => $updateData,
+                ]);
+
+                $this->orderRepository->update([$updateData], $context);
+            } catch (\Exception $e) {
+                $this->logger->error('ERROR: OrderSubscriber: Failed to update order', [
+                    'order' => $order->getId(),
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
     }
 
