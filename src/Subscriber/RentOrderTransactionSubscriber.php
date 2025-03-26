@@ -157,7 +157,7 @@ class RentOrderTransactionSubscriber implements EventSubscriberInterface
             $criteria->addAssociation('transactions.stateMachineState');
             $criteria->addAssociation('lineItems');
             $criteria->addAssociation('customFields');
-            $criteria->addAssociation('lineItems.payload');
+            // $criteria->addAssociation('lineItems.payload');
             $criteria->addAssociation('lineItems.product.customFields');
 
             $order = $this->orderRepository->search($criteria, $context)->first();
@@ -204,91 +204,73 @@ class RentOrderTransactionSubscriber implements EventSubscriberInterface
                 }
 
                 foreach ($lineItems as $lineItem) {
-                    $lineItemPayload = $lineItem->getPayload();
+                    $criteria = new Criteria();
+                    $criteria->addFilter(new EqualsFilter('id', $lineItem->getProductId()));
+                    $product = $this->productRepository->search($criteria, $context)->first();
 
-                    if (!isset($lineItemPayload['stock'])) {
-                        $this->logger->info('ABORTED Borrowing stock 2: No line items payload found in order', [
-                            'orderId' => $order->getId(),
-                            // 'orderCustomFields' => $orderCustomFields,
-                        ]);
+                    if ($product) {
+                        // Perform actions with the product
+                        $productCustomFields = $product->getCustomFields();
 
-                        return false;
-                    }
+                        if (!$productCustomFields or !isset($productCustomFields['mollie_payments_product_subscription_enabled'])) {
+                            $this->logger->info('ABORTED Borrowing stock 3: No product custom fields found', [
+                                'product' => $product->getId(),
+                                // 'productCustomFields' => $productCustomFields,
+                            ]);
 
-                    // check if the stock is below the required quantity
-                    if ($lineItemPayload['stock'] - $lineItem->getQuantity() < 0) {
-                        // calculate the number of items to borrow to get the stock to the required quantity - zero in the end
-                        // $numberOfItemsToBorrow = max(0, (int) $lineItem->getQuantity(), (int) $lineItemPayload['stock']); // - should we use this - fill up the stock only to zero?
-                        $numberOfItemsToBorrow = (int) $lineItem->getQuantity() - (int) $lineItemPayload['stock'];
-                    } else {
-                        // there's enough stock
-                        $this->logger->info('Borrowing stock NOT NEEDED', [
-                            'orderId' => $order->getId(),
-                            'lineItemQuantity' => (int) $lineItem->getQuantity(),
-                            'lineItemPayloadStock' => (int) $lineItemPayload['stock'],
-                        ]);
+                            return false;
+                        }
+                        // Check if the product is a subscription product
+                        $isSubscriptionProduct = true === $productCustomFields['mollie_payments_product_subscription_enabled'] ? true : false;
 
-                        return false;
-                    }
+                        if (!$isSubscriptionProduct) {
+                            $this->logger->info('ABORTED Borrowing stock 4: Product is not subscription type', [
+                                'product' => $product->getId(),
+                            ]);
 
-                    // if the number of items to borrow is above 0
-                    if ($numberOfItemsToBorrow > 0) {
-                        $this->logger->info('CONTINUED Borrowing stock: Line items was found in order, and the product stock was below the required purchased quantity', [
-                            'orderId' => $order->getId(),
-                            'lineItemQuantity' => (int) $lineItem->getQuantity(),
-                            'lineItemPayloadStock' => (int) $lineItemPayload['stock'],
-                            'numberOfItemsToBorrow' => $numberOfItemsToBorrow,
-                        ]);
+                            return false;
+                        }
 
-                        $criteria = new Criteria();
-                        $criteria->addFilter(new EqualsFilter('id', $lineItem->getProductId()));
-                        $product = $this->productRepository->search($criteria, $context)->first();
+                        // Check if the product has a borrow product variant
+                        if (!isset($productCustomFields['mollie_payments_product_parent_buy_variant'])) {
+                            $this->logger->info('ABORTED Borrowing stock 5: Product has no borrowing variant', [
+                                'product' => $product->getId(),
+                                'orderCustomFields' => $orderCustomFields,
+                            ]);
 
-                        if ($product) {
-                            // Perform actions with the product
-                            $productCustomFields = $product->getCustomFields();
+                            return false;
+                        }
 
-                            if (!$productCustomFields or !isset($productCustomFields['mollie_payments_product_subscription_enabled'])) {
-                                $this->logger->info('ABORTED Borrowing stock 3: No product custom fields found', [
-                                    'product' => $product->getId(),
-                                    // 'productCustomFields' => $productCustomFields,
-                                ]);
+                        $borrowProductVariantId = $productCustomFields['mollie_payments_product_parent_buy_variant'];
 
-                                return false;
-                            }
-                            // Check if the product is a subscription product
-                            $isSubscriptionProduct = true === $productCustomFields['mollie_payments_product_subscription_enabled'] ? true : false;
+                        if (!$borrowProductVariantId) {
+                            return false;
+                        }
 
-                            if (!$isSubscriptionProduct) {
-                                $this->logger->info('ABORTED Borrowing stock 4: Product is not subscription type', [
-                                    'product' => $product->getId(),
-                                ]);
+                        // search for the borrow product variant
+                        $criteria = new Criteria([$borrowProductVariantId]);
+                        $criteria->addAssociation('customFields');
 
-                                return false;
-                            }
+                        $productBorrowVariant = $this->productRepository->search($criteria, $context)->first();
 
-                            // Check if the product has a borrow product variant
-                            if (!isset($productCustomFields['mollie_payments_product_parent_buy_variant'])) {
-                                $this->logger->info('ABORTED Borrowing stock 5: Product has no borrowing variant', [
-                                    'product' => $product->getId(),
-                                    'orderCustomFields' => $orderCustomFields,
-                                ]);
+                        // check if the stock is below the required quantity
+                        if ($product->getStock() - $lineItem->getQuantity() < 0) {
+                            // calculate the number of items to borrow to get the stock to the required quantity - zero in the end
+                            // $numberOfItemsToBorrow = max(0, (int) $lineItem->getQuantity(), (int) $product->getStock()); // - should we use this - fill up the stock only to zero?
+                            $numberOfItemsToBorrow = (int) $lineItem->getQuantity() - (int) $product->getStock();
+                        } else {
+                            // there's enough stock
+                            $this->logger->info('Borrowing stock NOT NEEDED', [
+                                'orderId' => $order->getId(),
+                                'lineItemQuantity' => (int) $lineItem->getQuantity(),
+                                'productStock' => (int) $product->getStock(),
+                            ]);
 
-                                return false;
-                            }
+                            return false;
+                        }
 
-                            $borrowProductVariantId = $productCustomFields['mollie_payments_product_parent_buy_variant'];
-
-                            if (!$borrowProductVariantId) {
-                                return false;
-                            }
-
-                            // search for the borrow product variant
-                            $criteria = new Criteria([$borrowProductVariantId]);
-                            $criteria->addAssociation('customFields');
-
-                            $productBorrowVariant = $this->productRepository->search($criteria, $context)->first();
-
+                        // if the number of items to borrow is above 0
+                        if ($numberOfItemsToBorrow > 0) {
                             // Check if the borrow product variant is available on stock
                             if (!$productBorrowVariant or ($productBorrowVariant->getAvailableStock() < $numberOfItemsToBorrow)) {
                                 $this->logger->info('ABORTED Borrowing stock 6: Product borrowing variant doesnt exist or has not enough items on stock to borrow', [
@@ -302,6 +284,13 @@ class RentOrderTransactionSubscriber implements EventSubscriberInterface
                                 return false;
                             }
 
+                            $this->logger->info('CONTINUED Borrowing stock: Line items was found in order, and the product stock was below the required purchased quantity and borrowing vairant has enough on stock to borrow', [
+                                'orderId' => $order->getId(),
+                                'lineItemQuantity' => (int) $lineItem->getQuantity(),
+                                'product' => (int) $product->getStock(),
+                                'numberOfItemsToBorrow' => $numberOfItemsToBorrow,
+                            ]);
+
                             // now swap the product stock like this; substract sthe stock from productBorrowVariant by the line item quantity and add it to the product
                             // now swap the product stock like this; substract sthe stock from productBorrowVariant by the line item quantity and add it to the product
                             $this->logger->info('PROCESSING Borrowing stock: Reducing stock from borrow product variant', [
@@ -312,19 +301,23 @@ class RentOrderTransactionSubscriber implements EventSubscriberInterface
                                 'productBorrowVariant' => $productBorrowVariant->getId(),
                                 'newStock' => $productBorrowVariant->getStock() - $numberOfItemsToBorrow,
                                 'oldStock' => $productBorrowVariant->getStock(),
+                                'newAvailableStock' => $productBorrowVariant->getAvailableStock() - $numberOfItemsToBorrow,
+                                'oldAvailableStock' => $productBorrowVariant->getAvailableStock(),
                                 'numberOfItemsToBorrow' => $numberOfItemsToBorrow,
                             ]);
 
-                            $this->logger->info('PROCCESING Borrowing stock: Adding stock to subscription variant', [
-                                'orderId' => $orderId,
-                                'lineItemId' => $lineItem->getId(),
-                                'productId' => $lineItem->getProductId(),
-                                'quantity' => $lineItem->getQuantity(),
-                                'product' => $product->getId(),
-                                'newStock' => $product->getStock() + $numberOfItemsToBorrow,
-                                'oldStock' => $product->getStock(),
-                                'numberOfItemsBorrowed' => $numberOfItemsToBorrow,
-                            ]);
+                            // $this->logger->info('PROCCESING Borrowing stock: Adding stock to subscription variant', [
+                            //     'orderId' => $orderId,
+                            //     'lineItemId' => $lineItem->getId(),
+                            //     'productId' => $lineItem->getProductId(),
+                            //     'quantity' => $lineItem->getQuantity(),
+                            //     'product' => $product->getId(),
+                            //     'newStock' => $product->getStock(),
+                            //     'oldStock' => $product->getStock(),
+                            //     'newAvailableStock' => $product->getAvailableStock() + $numberOfItemsToBorrow,
+                            //     'oldAvailableStock' => $product->getAvailableStock(),
+                            //     'numberOfItemsBorrowed' => $numberOfItemsToBorrow,
+                            // ]);
 
                             // get context of the product borrow variant
                             $productRepositoryContext = Context::createDefaultContext();
@@ -338,12 +331,11 @@ class RentOrderTransactionSubscriber implements EventSubscriberInterface
                                         'availableStock' => $productBorrowVariant->getAvailableStock() - $numberOfItemsToBorrow,
                                         'stock' => $productBorrowVariant->getStock() - $numberOfItemsToBorrow,
                                     ],
-                                    // update the product
-                                    // THIS IS DISABLED FOR NOW
+                                    // update the product DEPRECATED
                                     // [
                                     //     'id' => $product->getId(),
                                     //     'availableStock' => $product->getAvailableStock() + $numberOfItemsToBorrow,
-                                    //     'stock' => $product->getStock() + $numberOfItemsToBorrow, // do we need to update this type of stock of the product so it doesnt becaome available for purchase before the order was marked as completed
+                                    //     // 'stock' => $product->getStock() + $numberOfItemsToBorrow, // do we need to update this type of stock of the product so it doesnt becaome available for purchase before the order was marked as completed
                                     // ],
                                 ],
                                 $productRepositoryContext
@@ -371,7 +363,7 @@ class RentOrderTransactionSubscriber implements EventSubscriberInterface
                             //         'oldAvailableStock' => $product->getAvailableStock(),
                             //         'oldStock' => $product->getStock(),
                             //         'newAvailableStock' => $product->getAvailableStock() + $numberOfItemsToBorrow,
-                            //         'newStock' => $product->getStock() + $numberOfItemsToBorrow,
+                            //         'newStock' => $product->getStock(),
                             //     ]
                             // );
 
@@ -388,8 +380,8 @@ class RentOrderTransactionSubscriber implements EventSubscriberInterface
                             // $orderCustomFields['os_subscriptions']['stock_borrowed_to_product_title'] = $product->getProductLabel() ?? null;
                             $orderCustomFields['os_subscriptions']['stock_borrowed_to_old_available_stock'] = $product->getAvailableStock();
                             $orderCustomFields['os_subscriptions']['stock_borrowed_to_old_stock'] = $product->getStock();
-                            $orderCustomFields['os_subscriptions']['stock_borrowed_to_new_available_stock'] = $product->getAvailableStock() + $numberOfItemsToBorrow;
-                            $orderCustomFields['os_subscriptions']['stock_borrowed_to_new_stock'] = $product->getStock() + $numberOfItemsToBorrow;
+                            // $orderCustomFields['os_subscriptions']['stock_borrowed_to_new_available_stock'] = $product->getAvailableStock() + $numberOfItemsToBorrow;
+                            // $orderCustomFields['os_subscriptions']['stock_borrowed_to_new_stock'] = $product->getStock();
                             $orderCustomFields['os_subscriptions']['stock_borrowed_amount'] = $numberOfItemsToBorrow;
 
                             $this->orderRepository->update([
@@ -402,19 +394,12 @@ class RentOrderTransactionSubscriber implements EventSubscriberInterface
                             $this->logger->info('PROCESSED Borrowing stock: Added borrowed stock data to order custom fields');
                         }
                     } else {
-                        $this->logger->info('ABORTED Borrowing stock 7: No need to borrow anything', [
-                            'orderId' => $order->getId(),
-                            'lineItemQuantity' => (int) $lineItem->getQuantity(),
-                            'lineItemPayloadStock' => (int) $lineItemPayload['stock'],
-                            'numberOfItemsToBorrow' => $numberOfItemsToBorrow,
-                            // 'orderCustomFields' => $orderCustomFields,
-                        ]);
+                        continue;
                     }
                 }
 
                 return true;
             }
-
             $this->logger->info('ABORTED Borrowing stock 8: Order is not of subscription initial type', [
                 'orderId' => $orderId,
                 // 'orderCustomFields' => $orderCustomFields,
