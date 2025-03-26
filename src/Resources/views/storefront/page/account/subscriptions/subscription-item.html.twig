@@ -48,6 +48,23 @@
     {% endif %}
 {% endblock %}
 
+{% block page_account_mollie_subscriptions_item_status %}
+    <div class="order-table-header-order-status">
+        {% block page_account_mollie_subscriptions_item_status_badge %}
+            <span class="badge badge-lg order-item-status-badge order-item-status-badge-{{ subscription.status }}">
+                {% if subscription.status == "active" %}
+                    aktiv
+                {% elseif subscription.status == "canceled" %}
+                    abgeschlossen
+                {% else %}
+                    {{ subscription.status }}
+                {% endif %}
+            </span>
+        {% endblock %}
+    </div>
+{% endblock %}
+
+
 {% block page_account_mollie_subscriptions_item_overview %}
     {{ parent() }}
 
