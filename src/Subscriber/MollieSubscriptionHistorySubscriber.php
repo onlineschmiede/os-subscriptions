@@ -98,6 +98,12 @@ class MollieSubscriptionHistorySubscriber implements EventSubscriberInterface
                 $quantity = $lineItem->getQuantity();
                 $productStock = $lineItem->getPayload()['stock'];
 
+                $this->logger->info('MollieSubscriptionHistorySubscriber: stock increase PROCESS', [
+                    'productId' => $lineItem->getProductId(),
+                    'quantityBefore' => $productStock + $quantity,
+                    'newQuantity' => $productStock,
+                ]);
+
                 // persist the stock storage, so no changes will take effect
                 $this->stockStorage->alter(
                     [new StockAlteration($lineItem->getId(), $lineItem->getProductId(), $productStock + $quantity, $productStock)],
