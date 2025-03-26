@@ -339,11 +339,12 @@ class RentOrderTransactionSubscriber implements EventSubscriberInterface
                                         'stock' => $productBorrowVariant->getStock() - $numberOfItemsToBorrow,
                                     ],
                                     // update the product
-                                    [
-                                        'id' => $product->getId(),
-                                        'availableStock' => $product->getAvailableStock() + $numberOfItemsToBorrow,
-                                        'stock' => $product->getStock() + $numberOfItemsToBorrow, // do we need to update this type of stock of the product so it doesnt becaome available for purchase before the order was marked as completed
-                                    ],
+                                    // THIS IS DISABLED FOR NOW
+                                    // [
+                                    //     'id' => $product->getId(),
+                                    //     'availableStock' => $product->getAvailableStock() + $numberOfItemsToBorrow,
+                                    //     'stock' => $product->getStock() + $numberOfItemsToBorrow, // do we need to update this type of stock of the product so it doesnt becaome available for purchase before the order was marked as completed
+                                    // ],
                                 ],
                                 $productRepositoryContext
                             );
@@ -361,18 +362,18 @@ class RentOrderTransactionSubscriber implements EventSubscriberInterface
                                 ]
                             );
 
-                            $this->logger->info(
-                                'PROCESSED Borrowing stock: Added stock to subscription product variant',
-                                [
-                                    'orderId' => $orderId,
-                                    'productBorrowedTo' => $product->getId(),
-                                    'numberOfItemsToBorrow' => $numberOfItemsToBorrow,
-                                    'oldAvailableStock' => $product->getAvailableStock(),
-                                    'oldStock' => $product->getStock(),
-                                    'newAvailableStock' => $product->getAvailableStock() - $numberOfItemsToBorrow,
-                                    'newStock' => $product->getStock() - $numberOfItemsToBorrow,
-                                ]
-                            );
+                            // $this->logger->info(
+                            //     'PROCESSED Borrowing stock: Added stock to subscription product variant',
+                            //     [
+                            //         'orderId' => $orderId,
+                            //         'productBorrowedTo' => $product->getId(),
+                            //         'numberOfItemsToBorrow' => $numberOfItemsToBorrow,
+                            //         'oldAvailableStock' => $product->getAvailableStock(),
+                            //         'oldStock' => $product->getStock(),
+                            //         'newAvailableStock' => $product->getAvailableStock() + $numberOfItemsToBorrow,
+                            //         'newStock' => $product->getStock() + $numberOfItemsToBorrow,
+                            //     ]
+                            // );
 
                             $orderCustomFields['os_subscriptions']['stock_borrowed'] = true;
                             $orderCustomFields['os_subscriptions']['stock_borrowed_from'] = $productBorrowVariant->getId();
@@ -431,5 +432,28 @@ class RentOrderTransactionSubscriber implements EventSubscriberInterface
 
             return false;
         }
+    }
+
+    private function completeTheOrder($order, $context): void
+    {
+        $orderStateMachineTransition = [
+            'entityId' => $order->getId(),
+            'actionName' => 'complete',
+            'entityName' => 'order',
+        ];
+
+        $deliveryStateMachineTransition = [
+            'entityId' => $order->getDeliveries()->first()->getId(),
+            'actionName' => 'ship',
+            'entityName' => 'order_delivery',
+        ];
+
+        $this->stateMachineStateRepository->transition($orderStateMachineTransition, $context);
+        $this->stateMachineStateRepository->transition($deliveryStateMachineTransition, $context);
+
+        $this->logger->info('Order and delivery states updated to completed and shipped', [
+            'orderId' => $order->getId(),
+            'deliveryId' => $order->getDeliveries()->first()->getId(),
+        ]);
     }
 }
