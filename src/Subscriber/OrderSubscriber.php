@@ -49,6 +49,12 @@ class OrderSubscriber implements EventSubscriberInterface
                 $criteria->addAssociation('customFields');
                 $currentOrder = $this->orderRepository->search($criteria, $event->getContext())->first();
 
+                // $customFields = $currentOrder->getCustomFields();
+
+                // dump($customFields);
+
+                // exit;
+
                 $this->tagOrder($currentOrder, $event->getContext());
                 $this->cancelAndTagSubscriptionOnResidualPurchase($currentOrder, $event->getContext());
             }
@@ -201,7 +207,7 @@ class OrderSubscriber implements EventSubscriberInterface
             }
         }
 
-        if ($shouldUpdate) {
+        if ($shouldUpdate and $subscriptionId) {
             // prepare data for update
 
             $this->logger->info('Order subscriber order should be updated', [
