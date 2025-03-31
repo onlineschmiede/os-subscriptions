@@ -282,6 +282,10 @@ class OrderSubscriber implements EventSubscriberInterface
                     'error' => $e->getMessage(),
                 ]);
             }
+        } else {
+            $this->logger->info('Order subscriber - order should not be updated', [
+                'orderId' => $order->getId(),
+            ]);
         }
     }
 
