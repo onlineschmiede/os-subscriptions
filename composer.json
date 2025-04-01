@@ -2,7 +2,7 @@
   "name": "os/subscriptions",
   "description": "Sell products as subscriptions",
   "type": "shopware-platform-plugin",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "license": "MIT",
   "autoload": {
     "psr-4": {

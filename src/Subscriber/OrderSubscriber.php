@@ -201,7 +201,7 @@ class OrderSubscriber implements EventSubscriberInterface
             }
         }
 
-        if ($shouldUpdate and $subscriptionId) {
+        if (true === $shouldUpdate and !empty($subscriptionId)) {
             // prepare data for update
 
             $this->logger->info('Order subscriber order should be updated', [
