@@ -97,10 +97,10 @@ class OrderSubscriber implements EventSubscriberInterface
             return;
         }
 
-        $this->logger->info('RESIDUAL CANCELLATION STARTED in OrderSubscriber', [
-            // 'subscriptionEntity' => $subscriptionEntity,
-            'subscriptionId' => $subscriptionId,
-        ]);
+        // $this->logger->info('RESIDUAL CANCELLATION STARTED in OrderSubscriber', [
+        //     // 'subscriptionEntity' => $subscriptionEntity,
+        //     'subscriptionId' => $subscriptionId,
+        // ]);
 
         try {
             if ($this->subscriptionManager->isCancelable($subscriptionEntity, $context)) {
@@ -158,25 +158,26 @@ class OrderSubscriber implements EventSubscriberInterface
 
         if (count($this->getResidualOrderLineItems($order)) > 0) {
             $shouldUpdate = !isset($customFields['os_subscriptions']['order_type']);
-            if ($shouldUpdate) {
+            // obtain the subscriptionId from any residualLineItems within the new order
+            // which are set within the AccountController. Otherwise we can't reference the subscription.
+            $subscriptionId = array_reduce(
+                $this->getResidualOrderLineItems($order),
+                fn ($carry, OrderLineItemEntity $item) => $carry ?: ($item->getPayload()['mollieSubscriptionId'] ?? null),
+                null
+            );
+
+            if ($shouldUpdate and $subscriptionId) {
                 $customFields['os_subscriptions']['order_type'] = 'residual';
-                // obtain the subscriptionId from any residualLineItems within the new order
-                // which are set within the AccountController. Otherwise we can't reference the subscription.
-                $subscriptionId = array_reduce(
-                    $this->getResidualOrderLineItems($order),
-                    fn ($carry, OrderLineItemEntity $item) => $carry ?: ($item->getPayload()['mollieSubscriptionId'] ?? null),
-                    null
-                );
                 $customFields['os_subscriptions']['subscription_id'] = $subscriptionId;
                 $shouldAddShopwareTag = true;
             }
         } else {
             $shouldUpdate = !isset($customFields['os_subscriptions']['order_type']);
+            $subscriptionId = $customFields['mollie_payments']['swSubscriptionId'];
 
-            if ($shouldUpdate) {
+            if ($shouldUpdate and $subscriptionId) {
                 // here we can access safely the subscriptionId as a renewals is always copied
                 // from the initial order.
-                $subscriptionId = $customFields['mollie_payments']['swSubscriptionId'];
 
                 $criteria = (new Criteria())->addFilter(new EqualsFilter('customFields.mollie_payments.swSubscriptionId', $subscriptionId));
                 $existingOrderCount = count($this->orderRepository->search($criteria, $context));

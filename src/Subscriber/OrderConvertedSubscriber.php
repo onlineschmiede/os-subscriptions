@@ -34,6 +34,7 @@ class OrderConvertedSubscriber implements EventSubscriberInterface
 
     public static function getSubscribedEvents(): array
     {
+        // INFO: this event doesnt return newly created order, but it returns "initial" order that is being cloned
         return [
             OrderConvertedEvent::class => 'onOrderConverted',
         ];
@@ -123,7 +124,7 @@ class OrderConvertedSubscriber implements EventSubscriberInterface
 
                 $this->logger->info('OrderConvertedSubscriber custom data written:', [
                     'orderId' => $order->getId(),
-                    'customFields' => $customFields,
+                    'customFields' => $customFields['os_subscriptions'],
                 ]);
             }
         }
