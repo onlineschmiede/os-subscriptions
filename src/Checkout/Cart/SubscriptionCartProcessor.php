@@ -175,7 +175,7 @@ class SubscriptionCartProcessor implements CartDataCollectorInterface, CartProce
 
             return $this->systemConfigService->get("OsSubscriptions.config.rentDiscountPercentageAtInterval{$interval}", $orderEntity->getSalesChannelId());
         } catch (\Exception $e) {
-            $this->logger->error('ERROR: OrderSubscriber:', [
+            $this->logger->error('ERROR: SubscriptionCartProcessor:', [
                 'error' => $e->getMessage(),
                 'line' => $e->getLine(),
                 'file' => $e->getFile(),

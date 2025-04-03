@@ -75,6 +75,13 @@ class AccountController extends AbstractStoreFrontController
 
             return $this->routeToSuccessPage('Deine Rücksendung wurde angelegt. Wir senden dir in Kürze alle weiteren Informationen per E-Mail zu.', 'Return process initiated for subscription '.$subscriptionId);
         } catch (\Throwable $exception) {
+            $this->logger->error('ERROR: AccountController:', [
+                'subscriptionId' => $subscriptionId ?? '',
+                'error' => $exception->getMessage(),
+                'line' => $exception->getLine(),
+                'file' => $exception->getFile(),
+            ]);
+
             return $this->routeToErrorPage(
                 'Unerwarteter Fehler beim starten des Rücksendungsprozesses.',
                 'Error while attempting to initiate the return process for subscription '.$subscriptionId.': '.$exception->getMessage()
@@ -157,6 +164,13 @@ class AccountController extends AbstractStoreFrontController
 
             return $this->redirectToRoute('frontend.checkout.cart.page');
         } catch (\Throwable $exception) {
+            $this->logger->error('ERROR: AccountController:', [
+                'subscriptionId' => $subscriptionId ?? '',
+                'error' => $exception->getMessage(),
+                'line' => $exception->getLine(),
+                'file' => $exception->getFile(),
+            ]);
+
             return $this->routeToErrorPage(
                 'Unerwarteter Fehler beim nutzen der Restkauf-Option.',
                 'Error occured on residual purchase for '.$subscriptionId.': '.$exception->getMessage()
@@ -302,7 +316,9 @@ class AccountController extends AbstractStoreFrontController
 
     private function routeToErrorPage(string $errorMessage, string $logMessage): RedirectResponse
     {
-        $this->logger->error($logMessage);
+        $this->logger->error('ERROR: AccountController:', [
+            'log' => $logMessage,
+        ]);
 
         $this->addFlash(self::DANGER, $errorMessage);
 
@@ -311,7 +327,9 @@ class AccountController extends AbstractStoreFrontController
 
     private function routeToSuccessPage(string $successMessage, string $logMessage): RedirectResponse
     {
-        $this->logger->info($logMessage);
+        $this->logger->error('ERROR: AccountController:', [
+            'log' => $logMessage,
+        ]);
 
         $this->addFlash(self::SUCCESS, $successMessage);
 

@@ -8,6 +8,9 @@ use Shopware\Core\Framework\DataAbstractionLayer\Event\EntityWrittenEvent;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
+/**
+ * Write meta data property "active" on subscription start.
+ */
 class MollieSubscriptionSubscriber implements EventSubscriberInterface
 {
     public function __construct(

@@ -71,10 +71,6 @@ class OrderSubscriber implements EventSubscriberInterface
         $residualOrderLineItems = $this->getResidualOrderLineItems($order);
 
         if (count($residualOrderLineItems) < 1) {
-            $this->logger->info('RESIDUAL item not found in order. Skipping', [
-                'order' => $order->getId(),
-            ]);
-
             return;
         }
 
@@ -91,25 +87,18 @@ class OrderSubscriber implements EventSubscriberInterface
             $this->logger->error('ERROR: OrderSubscriber: No subscriptionId found on residual purchase order', [
                 'order' => $order->getId(),
             ]);
-        }
-
-        $this->logger->info('RESIDUAL CANCELLATION STARTED in OrderSubscriber', [
-            'subscriptionId' => $subscriptionId,
-        ]);
-
-        $subscriptionEntity = $this->subscriptionManager->findSubscription($subscriptionId, $context);
-
-        if (!$subscriptionEntity) {
-            $this->logger->error('ERROR: OrderSubscriber: Subscription not found', [
-                'orderId' => $order->getId(),
-                'subscriptionId' => $subscriptionId,
-            ]);
 
             return;
         }
 
-        $this->logger->info('RESIDUAL CANCELLATION STARTED WITH DATA: OrderSubscriber: subscriptionId', [
-            'subscriptionEntity' => $subscriptionEntity,
+        $subscriptionEntity = $this->subscriptionManager->findSubscription($subscriptionId, $context);
+
+        if (!$subscriptionEntity) {
+            return;
+        }
+
+        $this->logger->info('RESIDUAL CANCELLATION STARTED in OrderSubscriber', [
+            // 'subscriptionEntity' => $subscriptionEntity,
             'subscriptionId' => $subscriptionId,
         ]);
 
@@ -181,7 +170,7 @@ class OrderSubscriber implements EventSubscriberInterface
                 $customFields['os_subscriptions']['subscription_id'] = $subscriptionId;
                 $shouldAddShopwareTag = true;
             }
-        } elseif (count($this->getRentOrderLineItems($order)) > 0) {
+        } else {
             $shouldUpdate = !isset($customFields['os_subscriptions']['order_type']);
 
             if ($shouldUpdate) {
@@ -203,12 +192,6 @@ class OrderSubscriber implements EventSubscriberInterface
 
         if (true === $shouldUpdate and !empty($subscriptionId)) {
             // prepare data for update
-
-            $this->logger->info('Order subscriber order should be updated', [
-                'orderId' => $order->getId(),
-                'subscriptionId' => $subscriptionId,
-            ]);
-
             $updateData = [
                 'id' => $order->getId(),
                 'customFields' => $customFields,
@@ -216,10 +199,6 @@ class OrderSubscriber implements EventSubscriberInterface
 
             // add shopware tag to the order
             if ($shouldAddShopwareTag) {
-                $this->logger->info('Order subscriber order should be tagged', [
-                    'orderId' => $order->getId(),
-                    'subscriptionId' => $subscriptionId,
-                ]);
                 // Get the tag ID from the system config
                 $tagId = $this->systemConfigService->get('OsSubscriptions.config.subscriptionRenewalBuyoutTag');
 
@@ -257,18 +236,10 @@ class OrderSubscriber implements EventSubscriberInterface
                         ]);
                     }
                 }
-            } else {
-                $this->logger->info('Order subscriber TAG should not be applied', [
-                    'orderId' => $order->getId(),
-                ]);
             }
 
             try {
-                $this->logger->info('TAG OrderSubscriber UPDATE starting', [
-                    'order' => $order->getId(),
-                    'updateData' => $updateData,
-                ]);
-
+                // write the data
                 $this->orderRepository->update([$updateData], $context);
             } catch (\Exception $e) {
                 $this->logger->error('ERROR: OrderSubscriber: Failed to update order', [
@@ -276,10 +247,6 @@ class OrderSubscriber implements EventSubscriberInterface
                     'error' => $e->getMessage(),
                 ]);
             }
-        } else {
-            $this->logger->info('Order subscriber - order should not be updated', [
-                'orderId' => $order->getId(),
-            ]);
         }
     }
 

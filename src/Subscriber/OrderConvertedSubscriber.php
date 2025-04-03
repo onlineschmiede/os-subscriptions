@@ -43,9 +43,6 @@ class OrderConvertedSubscriber implements EventSubscriberInterface
     {
         try {
             if ($this->shouldProcess($event)) {
-                $this->logger->info('OrderConvertedSubscriber Called:', [
-                    'event' => $event,
-                ]);
                 $this->refillEmptyProductStockByOrderQuantity($event);
             }
         } catch (\Exception $e) {
@@ -67,11 +64,6 @@ class OrderConvertedSubscriber implements EventSubscriberInterface
         $order = $event->getOrder();
         $mollieSubscriptionId = $order->getCustomFields()['mollie_payments']['swSubscriptionId'] ?? false;
 
-        $this->logger->info('OrderConvertedSubscriber shouldProcess 1:', [
-            'order' => $order,
-            'mollieSubscriptionId' => $mollieSubscriptionId,
-        ]);
-
         // only process mollie subscriptions
         if (!$mollieSubscriptionId) {
             return false;
@@ -80,11 +72,6 @@ class OrderConvertedSubscriber implements EventSubscriberInterface
         $order = $this->getOrderEntity($event, $mollieSubscriptionId);
         // prevent repeated execution
         $initialOrderWasCloned = $order->getCustomFields()['mollie_payments']['order_id'] ?? false;
-
-        $this->logger->info('OrderConvertedSubscriber shouldProcess 2:', [
-            'order' => $order,
-            'initialOrderWasCloned' => $initialOrderWasCloned,
-        ]);
 
         if ($initialOrderWasCloned) {
             return !$this->subscriptionAlreadyProcessed($mollieSubscriptionId, $event);
@@ -100,10 +87,6 @@ class OrderConvertedSubscriber implements EventSubscriberInterface
     {
         $order = $event->getOrder();
         $context = $event->getContext();
-
-        $this->logger->info('OrderConvertedSubscriber refillEmptyProductStockByOrderQuantity started:', [
-            'order' => $order,
-        ]);
 
         foreach ($order->getLineItems() as $lineItem) {
             if (LineItem::PRODUCT_LINE_ITEM_TYPE !== $lineItem->getType()) {
@@ -174,10 +157,6 @@ class OrderConvertedSubscriber implements EventSubscriberInterface
         $criteria->setLimit(1);
         $subscriptions = $this->subscriptionHistoryRepository->search($criteria, $event->getContext());
 
-        $this->logger->info('OrderConvertedSubscriber subscriptionAlreadyProcessed:', [
-            'subscriptions' => $subscriptions,
-        ]);
-
         if (count($subscriptions) < 1) {
             return false;
         }
@@ -190,11 +169,6 @@ class OrderConvertedSubscriber implements EventSubscriberInterface
 
         // note: might needs adjustement based on how mollie handles webhook retries
         $thresholdSeconds = 30;
-
-        $this->logger->info('OrderConvertedSubscriber subscriptionAlreadyProcessed 2:', [
-            'diffInSeconds' => $diffInSeconds,
-            'latestHistory' => $latestHistory,
-        ]);
 
         // hope and pray
         return $diffInSeconds < $thresholdSeconds;
