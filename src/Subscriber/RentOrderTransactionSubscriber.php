@@ -307,7 +307,23 @@ class RentOrderTransactionSubscriber implements EventSubscriberInterface
                             // get context of the product borrow variant
                             $productRepositoryContext = Context::createDefaultContext();
 
-                            // Update the product stock
+                            $productNewAvailableStock = $product->getAvailableStock();
+
+                            if ($product->getAvailableStock() - $lineItem->getQuantity() < 0) {
+                                $productNewAvailableStock = 0;
+                            } else {
+                                $productNewAvailableStock = $product->getAvailableStock() - $lineItem->getQuantity();
+                            }
+
+                            $productNewStock = $product->getStock();
+
+                            if ($product->getStock() - $lineItem->getQuantity() < 0) {
+                                $productNewStock = 0;
+                            } else {
+                                $productNewStock = $product->getStock() - $lineItem->getQuantity();
+                            }
+
+                            // Update the products stock
                             $this->productRepository->update(
                                 [
                                     // update the product borrow variant
@@ -316,45 +332,58 @@ class RentOrderTransactionSubscriber implements EventSubscriberInterface
                                         'availableStock' => $productBorrowVariant->getAvailableStock() - $numberOfItemsToBorrow,
                                         'stock' => $productBorrowVariant->getStock() - $numberOfItemsToBorrow,
                                     ],
-                                    // update the product DEPRECATED
-                                    // [
-                                    //     'id' => $product->getId(),
-                                    //     'availableStock' => $product->getAvailableStock() + $numberOfItemsToBorrow,
-                                    //     // 'stock' => $product->getStock() + $numberOfItemsToBorrow, // do we need to update this type of stock of the product so it doesnt becaome available for purchase before the order was marked as completed
-                                    // ],
+                                    // update the product available stock since if it is ever below 0 it will cause problems for borrowing, renewals, and buyout
+                                    [
+                                        'id' => $product->getId(),
+                                        'availableStock' => $productNewAvailableStock, // we need to set it to 0 so it doesnt become available for purchase before the order was marked as completed. //$product->getAvailableStock() + $numberOfItemsToBorrow
+                                        'stock' => $productNewStock, // do we need to update this type of stock of the product so it doesnt becaome available for purchase before the order was marked as completed
+                                    ],
+                                ],
+                                $productRepositoryContext
+                            );
+
+                            // Update the product stock
+                            $this->productRepository->update(
+                                [
+                                    // update the product available stock since if it is ever below 0 it will cause problems for borrowing, renewals, and buyout
+                                    [
+                                        'id' => $product->getId(),
+                                        'availableStock' => 0, // we need to set it to 0 so it doesnt become available for purchase before the order was marked as completed. //$product->getAvailableStock() + $numberOfItemsToBorrow
+                                        // 'stock' => $product->getStock() + $numberOfItemsToBorrow, // do we need to update this type of stock of the product so it doesnt becaome available for purchase before the order was marked as completed
+                                    ],
                                 ],
                                 $productRepositoryContext
                             );
 
                             $this->logger->info(
-                                'PROCESSED Borrowing stock: Reduced stock from borrow product variant',
+                                'PROCESSED Borrowing stock: STOCK UPDATES PERFORMED',
                                 [
                                     'orderId' => $orderId,
                                     'productBorrowedFrom' => $productBorrowVariant->getId(),
                                     'numberOfItemsToBorrow' => $numberOfItemsToBorrow,
-                                    'oldAvailableStock' => $productBorrowVariant->getAvailableStock(),
-                                    'oldStock' => $productBorrowVariant->getStock(),
-                                    'newAvailableStock' => $productBorrowVariant->getAvailableStock() - $numberOfItemsToBorrow,
-                                    'newStock' => $productBorrowVariant->getStock() - $numberOfItemsToBorrow,
+                                    'oldStockBorrowedFrom' => $productBorrowVariant->getStock(),
+                                    'oldAvailableStockBorrowedFrom' => $productBorrowVariant->getAvailableStock(),
+                                    'newAvailableStockBorrowedFrom' => $productBorrowVariant->getAvailableStock() - $numberOfItemsToBorrow,
+                                    'newStockBorrowedFrom' => $productBorrowVariant->getStock() - $numberOfItemsToBorrow,
+                                    'oldStockBorrowedTo' => $product->getStock(),
+                                    'oldAvailableStockBorrowedTo' => $product->getAvailableStock(),
+                                    'newAvailableStockBorrowedTo' => $productNewAvailableStock,
+                                    'newStockBorrowedTo' => $productNewStock,
                                 ]
                             );
 
                             // write the borrowing data
                             $orderCustomFields['os_subscriptions']['stock_borrowed'] = true;
                             $orderCustomFields['os_subscriptions']['stock_borrowed_from'] = $productBorrowVariant->getId();
-                            // $orderCustomFields['os_subscriptions']['stock_borrowed_from_product_number'] = $productBorrowVariant->getProductNumber() ?? null;
-                            // $orderCustomFields['os_subscriptions']['stock_borrowed_from_product_title'] = $productBorrowVariant->getProductLabel() ?? null;
-                            $orderCustomFields['os_subscriptions']['stock_borrowed_from_old_available_stock'] = $productBorrowVariant->getAvailableStock();
-                            $orderCustomFields['os_subscriptions']['stock_borrowed_from_old_stock'] = $productBorrowVariant->getStock();
-                            $orderCustomFields['os_subscriptions']['stock_borrowed_from_new_available_stock'] = $productBorrowVariant->getAvailableStock() - $numberOfItemsToBorrow;
-                            $orderCustomFields['os_subscriptions']['stock_borrowed_from_new_stock'] = $productBorrowVariant->getStock() - $numberOfItemsToBorrow;
                             $orderCustomFields['os_subscriptions']['stock_borrowed_to'] = $product->getId();
-                            //  $orderCustomFields['os_subscriptions']['stock_borrowed_to_product_number'] = $product->getProductNumber() ?? null;
-                            // $orderCustomFields['os_subscriptions']['stock_borrowed_to_product_title'] = $product->getProductLabel() ?? null;
-                            $orderCustomFields['os_subscriptions']['stock_borrowed_to_old_available_stock'] = $product->getAvailableStock();
                             $orderCustomFields['os_subscriptions']['stock_borrowed_to_old_stock'] = $product->getStock();
-                            // $orderCustomFields['os_subscriptions']['stock_borrowed_to_new_available_stock'] = $product->getAvailableStock() + $numberOfItemsToBorrow;
-                            // $orderCustomFields['os_subscriptions']['stock_borrowed_to_new_stock'] = $product->getStock();
+                            $orderCustomFields['os_subscriptions']['stock_borrowed_to_old_available_stock'] = $product->getAvailableStock();
+                            $orderCustomFields['os_subscriptions']['stock_borrowed_to_new_stock'] = $productNewStock;
+                            $orderCustomFields['os_subscriptions']['stock_borrowed_to_new_available_stock'] = $productNewAvailableStock;
+                            $orderCustomFields['os_subscriptions']['stock_borrowed_from_old_stock'] = $productBorrowVariant->getStock();
+                            $orderCustomFields['os_subscriptions']['stock_borrowed_from_old_available_stock'] = $productBorrowVariant->getAvailableStock();
+                            $orderCustomFields['os_subscriptions']['stock_borrowed_from_new_stock'] = $productBorrowVariant->getStock() - $numberOfItemsToBorrow;
+                            $orderCustomFields['os_subscriptions']['stock_borrowed_from_new_available_stock'] = $productBorrowVariant->getAvailableStock() - $numberOfItemsToBorrow;
                             $orderCustomFields['os_subscriptions']['stock_borrowed_amount'] = $numberOfItemsToBorrow;
 
                             $this->orderRepository->update([
